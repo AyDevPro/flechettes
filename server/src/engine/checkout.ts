@@ -53,6 +53,13 @@ const LEVEL_WEIGHTS: Record<Level, { single: number; double: number; triple: num
 /** Chaque fléchette supplémentaire coûte plus que n'importe quel écart de difficulté. */
 const DART_COST = 6;
 
+/**
+ * Score à partir duquel une préparation est proposée. 180 est le maximum d'une
+ * volée : au-dessus, le conseil se résumerait toujours à « vise le 20 », autant
+ * ne rien afficher tant que la sortie n'est pas en vue.
+ */
+export const ADVICE_FROM = 180;
+
 /** Poids des points marqués lors d'un tour de préparation, par niveau. */
 const POINT_WEIGHT: Record<Level, number> = { beginner: 0.1, standard: 0.25, expert: 0.28 };
 
@@ -421,6 +428,9 @@ export function recommend(opts: {
       };
     }
   }
+
+  // Trop haut pour qu'un conseil ait du sens : on n'affiche rien.
+  if (remaining > ADVICE_FROM) return NONE;
 
   // Pas de sortie possible ce tour-ci : on prépare le tour suivant.
   const plan = planSetup(remaining, dartsLeft, outRule, level);

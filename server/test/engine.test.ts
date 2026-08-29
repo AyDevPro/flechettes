@@ -168,18 +168,22 @@ test('une seule fléchette : seule une sortie directe est proposée', () => {
   assert.equal(reco(60, 1, 'triple', 'standard').text, 'T20');
 });
 
-test('score trop élevé : le moteur prépare le tour suivant', () => {
-  const r = reco(240, 3, 'double', 'standard');
-  assert.equal(r.kind, 'setup');
-  assert.deepEqual(r.labels, ['T20', 'T20', 'T20']);
+test('score trop élevé : aucun conseil au-dessus de 180', () => {
+  // Au-dessus d'une volée maximale, le conseil serait toujours « vise le 20 ».
+  for (const remaining of [501, 301, 240, 200, 181]) {
+    assert.equal(reco(remaining, 3, 'double', 'standard').kind, 'none', `${remaining} ne devrait rien proposer`);
+  }
+});
 
-  // 180 ne se sort pas : on vise 140 pour laisser 40 (D20).
+test('à partir de 180, le moteur prépare le tour suivant', () => {
+  // 180 ne se sort pas en Double Out : on vise 140 pour laisser 40 (D20).
   const setup = reco(180, 3, 'double', 'standard');
   assert.equal(setup.kind, 'setup');
+  assert.deepEqual(setup.labels, ['T20', 'T20', '20']);
   assert.equal(setup.note, 'Laisse 40, sortable au prochain tour');
 
   // Une préparation ne doit jamais conduire à un Bust ni à un reste injouable.
-  for (const remaining of [500, 301, 240, 200, 180, 171, 169, 100, 62]) {
+  for (const remaining of [180, 171, 169, 100, 62]) {
     for (const darts of [3, 2, 1]) {
       const plan = reco(remaining, darts, 'double', 'standard');
       if (plan.kind !== 'setup') continue;
@@ -190,10 +194,14 @@ test('score trop élevé : le moteur prépare le tour suivant', () => {
   }
 });
 
-test('le mode Débutant marque avec de grands segments simples', () => {
-  const r = reco(501, 3, 'double', 'beginner');
-  assert.equal(r.kind, 'setup');
-  assert.ok(r.labels.every((l) => !l.startsWith('T')), `route trop technique : ${r.text}`);
+test('le mode Débutant vise des cibles plus simples pour préparer', () => {
+  // Avec une seule fléchette sur 62, un débutant vise un grand simple ; les
+  // autres niveaux acceptent un triple pour laisser un meilleur reste.
+  const beginner = reco(62, 1, 'double', 'beginner');
+  const standard = reco(62, 1, 'double', 'standard');
+  assert.equal(beginner.kind, 'setup');
+  assert.ok(beginner.labels.every((l) => !l.startsWith('T')), `route trop technique : ${beginner.text}`);
+  assert.ok(standard.labels.some((l) => l.startsWith('T')), `route trop timide : ${standard.text}`);
 });
 
 test('un reste sans option est jugé fragile', () => {

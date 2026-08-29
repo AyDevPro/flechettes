@@ -90,13 +90,17 @@ base — ce qui le rend directement testable (`npm test`, 28 tests).
 
 - **entrée** (`D20`) tant que le Double In n'est pas passé ;
 - **checkout** dès que le score est sortable avec les fléchettes restantes ;
-- **préparation** sinon : quoi viser pour laisser le meilleur score possible.
+- **préparation** entre 180 et la zone de sortie : quoi viser pour laisser le
+  meilleur score possible.
 
-Exemple de préparation, à 301 : aucune sortie n'existe (le maximum en trois
-fléchettes est 170), le moteur propose donc `T20 → T20 → T19` — *« laisse 124,
-sortable au prochain tour »*. La dernière fléchette est choisie pour tomber sur
-un reste confortable (124 se sort en `T20 → T16 → D8`) plutôt que pour marquer
-le maximum : trois T20 laisseraient 121, légèrement moins bon.
+Au-dessus de **180** — le maximum d'une volée — rien n'est affiché : le conseil
+se résumerait toujours à « vise le 20 », et l'écran reste propre tant que la
+sortie n'est pas en vue.
+
+Exemple de préparation, à 180 : aucune sortie n'existe en Double Out (le maximum
+est 170), le moteur propose donc `T20 → T20 → 20` — *« laisse 40, sortable au
+prochain tour »*. La dernière fléchette est choisie pour tomber sur un reste
+confortable (40 = D20) plutôt que pour marquer le maximum.
 
 Les routes sont classées par un coût qui mélange le nombre de fléchettes, la
 difficulté des cibles, la qualité du double final (un D16 manqué laisse 16, donc
