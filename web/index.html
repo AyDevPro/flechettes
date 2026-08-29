@@ -83,6 +83,7 @@
     <h2>Qui utilise ce téléphone ?</h2>
     <div class="seg" id="pickerList"></div>
     <p class="hint">Choisissez votre nom pour n'avoir le pavé de saisie que pendant votre tour, ou « téléphone partagé » pour saisir les fléchettes de tout le monde.</p>
+    <button class="btn ghost block" type="button" id="pickerCancel" hidden>Retour à la partie</button>
   </section>
 
   <!-- 3. Saisie ------------------------------------------------------------ -->
@@ -122,7 +123,7 @@
     </div>
 
     <section class="card" style="margin:0">
-      <h2>Scores</h2>
+      <h2 id="scoresTitle">Scores</h2>
       <ul class="standings" id="standings"></ul>
     </section>
   </main>

@@ -13,6 +13,7 @@ const draft = [];                       // joueurs saisis avant le lancement
 
 let view = null;                        // état de la partie, ou null
 let choice = store.get('player');       // 'shared' | id du joueur | null
+let pickerOpen = false;                 // le sélecteur de joueur est affiché
 let mult = 'S';
 
 $('#tvUrl').textContent = `${location.host}/tv`;
@@ -183,34 +184,60 @@ async function newGame() {
 
 // ── Choix du joueur ────────────────────────────────────────────────────────
 
-$('#whoBtn').addEventListener('click', () => openPicker());
+$('#whoBtn').addEventListener('click', () => {
+  pickerOpen = true;
+  if (view) render(view);
+});
 
-function openPicker() {
-  if (!view) return;
+/**
+ * Dessine le sélecteur de joueur. Il reste ouvert tant que rien n'a été choisi :
+ * le téléphone passe de main en main pendant que la partie continue à envoyer
+ * son état, et fermer l'écran sous les doigts du joueur donnerait l'impression
+ * que les boutons ne répondent pas.
+ */
+function renderPicker() {
   const box = $('#pickerList');
   box.replaceChildren();
+
   for (const player of view.players.filter((p) => !p.removed)) {
     const button = el('button');
     button.type = 'button';
-    button.append(el('strong', '', player.name), el('span', '', player.finished ? 'A terminé' : `${player.score} points`));
+    button.setAttribute('aria-pressed', String(player.id === choice));
+    const state = player.finished ? 'A terminé'
+      : player.id === view.currentPlayerId ? 'C\'est son tour'
+        : `${player.score} points`;
+    button.append(el('strong', '', player.name), el('span', '', state));
     button.addEventListener('click', () => pick(player.id));
     box.append(button);
   }
+
   const shared = el('button');
   shared.type = 'button';
+  shared.setAttribute('aria-pressed', String(choice === SHARED));
   shared.append(el('strong', '', 'Téléphone partagé'), el('span', '', 'Je saisis pour tous les joueurs'));
   shared.addEventListener('click', () => pick(SHARED));
   box.append(shared);
+
+  // On ne peut refermer le sélecteur que si un joueur est déjà associé.
+  const cancel = $('#pickerCancel');
+  cancel.hidden = !choice;
   show('picker');
 }
 
 function pick(value) {
   choice = value;
   store.set('player', value);
+  pickerOpen = false;
   conn.setPlayer(value === SHARED ? null : value);
   conn.send({ type: 'claim', playerId: value === SHARED ? null : value });
+  buzz(12);
   if (view) render(view);
 }
+
+$('#pickerCancel').addEventListener('click', () => {
+  pickerOpen = false;
+  if (view) render(view);
+});
 
 // ── Rendu ──────────────────────────────────────────────────────────────────
 
@@ -230,7 +257,10 @@ function render(next) {
     return show('setup');
   }
 
-  $('#rules').textContent = `${view.startScore} · ${RULE_LABELS.out[view.outRule]}`;
+  // La barre du haut reste courte (elle partage la ligne avec deux boutons) :
+  // le détail des règles est rappelé au-dessus des scores.
+  $('#rules').textContent = String(view.startScore);
+  $('#scoresTitle').textContent = `Scores · ${RULE_LABELS.in[view.inRule]} · ${RULE_LABELS.out[view.outRule]} · Conseils ${RULE_LABELS.level[view.level]}`;
   $('#quitBtn').hidden = false;
   $('#quitBtn').textContent = view.status === 'finished' ? 'Nouvelle' : 'Terminer';
 
@@ -244,10 +274,13 @@ function render(next) {
   $('#whoBtn').textContent = choice === SHARED ? 'Partagé' : me ? me.name : 'Choisir';
 
   if (view.status === 'finished') {
+    pickerOpen = false;
     renderStandings($('#finalList'), true);
     return show('over');
   }
-  if (!choice) return openPicker();
+
+  if (!choice) pickerOpen = true;
+  if (pickerOpen) return renderPicker();
 
   show('game');
 
