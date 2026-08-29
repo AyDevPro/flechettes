@@ -1,0 +1,68 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# flechettes — déploiement PRODUCTION (VPS aydev)
+#
+#   • Un seul conteneur : pas de base de données. La partie en cours est
+#     recopiée dans /data/game.json (volume `state`) après chaque fléchette,
+#     ce qui suffit à survivre à un redémarrage ou à une actualisation de page.
+#   • Aucun port publié : Traefik (compose racine /root/aydev) tient 80/443,
+#     termine le TLS et route via les labels ci-dessous sur le réseau partagé
+#     `aydev_aydev-net`.
+#   • Durcissement sécurité aligné sur garde-manger (incident cryptominer,
+#     mai 2026) : mem_limit, pids_limit, cap_drop, tmpfs noexec, no-new-privileges.
+#
+# Déploiement :  docker compose up -d --build
+# Domaine     :  https://flechettes.aydev.app
+# ─────────────────────────────────────────────────────────────────────────────
+services:
+  app:
+    build: .
+    container_name: flechettes-app
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Europe/Paris}
+      PORT: 3000
+      STATE_FILE: /data/game.json
+    volumes:
+      - state:/data
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=aydev_aydev-net"
+      - "traefik.http.routers.flechettes.rule=Host(`flechettes.aydev.app`)"
+      - "traefik.http.routers.flechettes.entrypoints=websecure"
+      - "traefik.http.routers.flechettes.tls.certresolver=letsencrypt"
+      - "traefik.http.services.flechettes.loadbalancer.server.port=3000"
+    # ── Durcissement (borne le rayon d'action d'une éventuelle compromission) ──
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpus: 1.0
+    pids_limit: 256
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+    networks:
+      - aydev-net
+
+volumes:
+  state:
+
+# Réseau partagé avec Traefik (défini par le compose racine /root/aydev).
+networks:
+  aydev-net:
+    external: true
+    name: aydev_aydev-net

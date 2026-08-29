@@ -1,0 +1,18 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# flechettes — exécution LOCALE de l'image de production.
+#   docker compose -f docker-compose.dev.yml up --build   →  http://localhost:3000
+# ─────────────────────────────────────────────────────────────────────────────
+services:
+  app:
+    build: .
+    container_name: flechettes-app-dev
+    environment:
+      PORT: 3000
+      STATE_FILE: /data/game.json
+    volumes:
+      - state-dev:/data
+    ports:
+      - "3000:3000"
+
+volumes:
+  state-dev:

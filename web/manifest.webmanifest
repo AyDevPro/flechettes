@@ -1,0 +1,23 @@
+{
+  "name": "Fléchettes",
+  "short_name": "Fléchettes",
+  "description": "Gérez vos parties de 301 et 501 : saisie sur téléphone, tableau d'affichage sur la télévision.",
+  "lang": "fr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0e1216",
+  "theme_color": "#0e1216",
+  "orientation": "any",
+  "categories": ["games", "sports", "utilities"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/logo.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "shortcuts": [
+    { "name": "Saisie des fléchettes", "url": "/" },
+    { "name": "Écran TV", "url": "/tv" }
+  ]
+}

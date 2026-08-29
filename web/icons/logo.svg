@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Fléchettes">
+  <circle cx="32" cy="32" r="31" fill="#0e1216"/>
+  <circle cx="32" cy="32" r="28" fill="#f2efe6"/>
+  <g fill="#1a222b">
+    <path d="M32 4a28 28 0 0 1 24.25 14L32 32Z"/>
+    <path d="M56.25 46A28 28 0 0 1 32 60L32 32Z"/>
+    <path d="M7.75 18A28 28 0 0 0 7.75 46L32 32Z"/>
+  </g>
+  <circle cx="32" cy="32" r="21" fill="none" stroke="#3fb96b" stroke-width="4"/>
+  <circle cx="32" cy="32" r="12" fill="none" stroke="#e04b3c" stroke-width="4"/>
+  <circle cx="32" cy="32" r="6" fill="#3fb96b"/>
+  <circle cx="32" cy="32" r="2.6" fill="#e04b3c"/>
+</svg>

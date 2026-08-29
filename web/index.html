@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Fléchettes</title>
+<meta name="theme-color" content="#0e1216">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/icon-180.png">
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<div class="play">
+  <div class="topbar">
+    <span class="dot" id="conn"></span>
+    <span class="code">FLÉCHETTES</span>
+    <span id="rules"></span>
+    <span class="spacer"></span>
+    <button class="btn ghost" id="whoBtn" hidden>Joueur</button>
+    <button class="btn ghost danger" id="quitBtn" hidden>Terminer</button>
+  </div>
+
+  <!-- 1. Création de la partie ------------------------------------------- -->
+  <form id="setup" hidden>
+    <section class="card">
+      <h2>Type de partie</h2>
+      <div class="seg" id="startScore">
+        <button type="button" value="301"><strong>301</strong><span>Partie courte</span></button>
+        <button type="button" value="501"><strong>501</strong><span>Format classique</span></button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Entrée</h2>
+      <div class="seg" id="inRule">
+        <button type="button" value="straight"><strong>Straight In</strong><span>On marque dès la première fléchette</span></button>
+        <button type="button" value="double"><strong>Double In</strong><span>Il faut un double pour démarrer</span></button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Sortie</h2>
+      <div class="seg" id="outRule">
+        <button type="button" value="straight"><strong>Straight Out</strong><span>N'importe quelle fléchette</span></button>
+        <button type="button" value="double"><strong>Double Out</strong><span>Double ou bull 50</span></button>
+        <button type="button" value="master"><strong>Master Out</strong><span>Double ou triple</span></button>
+        <button type="button" value="triple"><strong>Triple Out</strong><span>Triple uniquement</span></button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Niveau des conseils</h2>
+      <div class="seg" id="level">
+        <button type="button" value="beginner"><strong>Débutant</strong><span>Grandes zones, chemins simples</span></button>
+        <button type="button" value="standard"><strong>Standard</strong><span>Routes de checkout classiques</span></button>
+        <button type="button" value="expert"><strong>Expert</strong><span>Routes optimisées, bons restes</span></button>
+      </div>
+      <p class="hint">Le niveau ne change pas les règles : seulement les cibles conseillées.</p>
+    </section>
+
+    <section class="card">
+      <h2>Joueurs</h2>
+      <div class="row">
+        <input type="text" id="playerName" placeholder="Nom du joueur" autocomplete="off" maxlength="20" enterkeyhint="done">
+        <button class="btn primary" type="button" id="addPlayer">Ajouter</button>
+      </div>
+      <ul class="players" id="playerList"></ul>
+      <label class="check"><input type="checkbox" id="shuffle"> Mélanger l'ordre de passage</label>
+      <p class="hint" id="playerHint">L'ordre d'ajout est l'ordre de passage.</p>
+    </section>
+
+    <button class="btn primary block" type="submit" id="createBtn">Lancer la partie</button>
+    <p class="error" id="error"></p>
+    <p class="hint" style="text-align:center">Sur la télévision, ouvrez <b id="tvUrl">…/tv</b></p>
+  </form>
+
+  <!-- 2. Choix du joueur --------------------------------------------------- -->
+  <section class="card" id="picker" hidden>
+    <h2>Qui utilise ce téléphone ?</h2>
+    <div class="seg" id="pickerList"></div>
+    <p class="hint">Choisissez votre nom pour n'avoir le pavé de saisie que pendant votre tour, ou « téléphone partagé » pour saisir les fléchettes de tout le monde.</p>
+  </section>
+
+  <!-- 3. Saisie ------------------------------------------------------------ -->
+  <main id="game" hidden>
+    <section class="scoreboard" id="scoreboard">
+      <div class="who"><span class="badge" id="turnBadge">Au tour de</span><span id="playerNameLive">—</span></div>
+      <div class="score" id="score">—</div>
+      <div class="meta" id="meta"></div>
+      <div class="darts" id="darts"></div>
+      <div class="reco" id="reco" hidden>
+        <div class="label" id="recoLabel">Checkout conseillé</div>
+        <div class="route" id="recoRoute"></div>
+        <div class="note" id="recoNote"></div>
+      </div>
+    </section>
+
+    <p class="waitline" id="waitline" hidden></p>
+
+    <div class="keypad" id="keypad">
+      <div class="quick" id="quick"></div>
+      <div class="mults" id="mults">
+        <button type="button" data-mult="S" aria-pressed="true">SIMPLE</button>
+        <button type="button" data-mult="D" aria-pressed="false">DOUBLE</button>
+        <button type="button" data-mult="T" aria-pressed="false">TRIPLE</button>
+      </div>
+      <div class="numbers" id="numbers"></div>
+      <div class="specials">
+        <button type="button" data-code="S25">25</button>
+        <button type="button" class="bull" data-code="D25">BULL 50</button>
+        <button type="button" class="miss" data-code="MISS">RATÉ</button>
+      </div>
+      <div class="tools">
+        <button class="btn" type="button" id="undoBtn">↶ Annuler</button>
+        <button class="btn" type="button" id="skipBtn">Passer le tour</button>
+        <button class="btn" type="button" id="pauseBtn">Pause</button>
+      </div>
+    </div>
+
+    <section class="card" style="margin:0">
+      <h2>Scores</h2>
+      <ul class="standings" id="standings"></ul>
+    </section>
+  </main>
+
+  <!-- 4. Fin de partie ----------------------------------------------------- -->
+  <section class="card" id="over" hidden>
+    <h2>Classement final</h2>
+    <ul class="standings" id="finalList"></ul>
+    <div class="links" style="margin-top:12px">
+      <button class="btn primary block" type="button" id="newBtn">Nouvelle partie</button>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>

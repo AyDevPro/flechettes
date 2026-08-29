@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fléchettes — tableau d'affichage</title>
+<meta name="theme-color" content="#0e1216">
+<link rel="icon" href="/icons/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/app.css">
+<link rel="stylesheet" href="/css/tv.css">
+</head>
+<body>
+<div class="tv">
+  <header class="tv-head">
+    <img class="logo" src="/icons/logo.svg" alt="">
+    <div>
+      <div class="title" id="title">Fléchettes</div>
+      <div class="rules" id="rules"></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="join">
+      <div>
+        <div class="cap">Saisie sur téléphone</div>
+        <div class="code" id="url">…</div>
+      </div>
+      <div class="qr" id="qr"></div>
+    </div>
+  </header>
+
+  <main class="tv-main">
+    <section class="stage" id="stage"></section>
+    <section class="roster" id="roster"></section>
+  </main>
+
+  <footer class="tv-foot" id="foot"></footer>
+</div>
+
+<div class="flash" id="flash"><div><div class="big" id="flashBig"></div><div class="small" id="flashSmall"></div></div></div>
+<script type="module" src="/js/tv.js"></script>
+</body>
+</html>

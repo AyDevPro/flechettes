@@ -1,0 +1,15 @@
+{
+  "name": "flechettes",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Application de fléchettes : saisie sur téléphone, tableau d'affichage TV, synchronisation temps réel.",
+  "scripts": {
+    "dev": "cd server && npm run dev",
+    "start": "cd server && npm start",
+    "build": "cd server && npm run build",
+    "test": "cd server && npm test",
+    "typecheck": "cd server && npm run typecheck",
+    "install:server": "cd server && npm install",
+    "icons": "node scripts/gen-icons.mjs"
+  }
+}
