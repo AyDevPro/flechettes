@@ -5,6 +5,12 @@ import { $, RULE_LABELS, connect, el, loadQr } from './common.js';
 let lastEventId = 0;
 let view = null;
 
+/** Mémoire du dernier rendu : sert à n'animer que ce qui vient de changer. */
+const previous = { playerId: null, score: null, darts: 0, turnNo: null, floatedTurn: null };
+/** Dernier score connu de chaque joueur, pour n'animer que les lignes qui bougent. */
+let previousScores = new Map();
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 $('#url').textContent = location.host;
 loadQr($('#qr'), `${location.origin}/`);
 
@@ -45,6 +51,66 @@ function render(next) {
   const events = view.events ?? [];
   if (first) lastEventId = events.at(-1)?.id ?? 0;
   else playEvents(events);
+
+  // Total du tour qui vient de s'achever (les gros scores ont déjà leur annonce).
+  const last = view.history[0];
+  if (last && last.turnNo !== previous.floatedTurn) {
+    // Les gros scores et les Busts ont déjà leur annonce plein écran.
+    if (!first && !last.busted && last.total > 0 && last.total < 100) floatTotal(last.total);
+    previous.floatedTurn = last.turnNo;
+  }
+
+  previous.playerId = view.current.playerId;
+  previous.score = view.current.score;
+  previous.darts = view.turn?.darts.length ?? 0;
+  previous.turnNo = view.turnNo;
+}
+
+/** Fait défiler un nombre d'une valeur à l'autre, puis le fait pulser. */
+let rollFrame = null;
+let rollGuard = null;
+function rollTo(node, from, to) {
+  cancelAnimationFrame(rollFrame);
+  clearTimeout(rollGuard);
+  // Onglet en arrière-plan : requestAnimationFrame est gelé, on affiche la
+  // valeur finale directement plutôt que de laisser un score figé à l'écran.
+  if (reduceMotion || document.hidden || from === null || from === to) {
+    node.textContent = to;
+    return;
+  }
+  replay(node, 'pop');
+  const duration = Math.min(620, 200 + Math.abs(to - from) * 3.2);
+  const start = performance.now();
+  const step = (now) => {
+    const k = Math.min(1, (now - start) / duration);
+    const eased = 1 - (1 - k) ** 3;
+    node.textContent = Math.round(from + (to - from) * eased);
+    if (k < 1) rollFrame = requestAnimationFrame(step);
+    else node.textContent = to;
+  };
+  rollFrame = requestAnimationFrame(step);
+  // Filet de sécurité : quoi qu'il arrive, le vrai score finit par s'afficher.
+  rollGuard = setTimeout(() => {
+    cancelAnimationFrame(rollFrame);
+    node.textContent = to;
+  }, duration + 400);
+}
+
+/** Rejoue une animation CSS même si la classe est déjà posée. */
+function replay(node, className) {
+  if (reduceMotion) return;
+  node.classList.remove(className);
+  void node.offsetWidth; // force le navigateur à repartir de zéro
+  node.classList.add(className);
+  node.addEventListener('animationend', () => node.classList.remove(className), { once: true });
+}
+
+function floatTotal(total) {
+  if (reduceMotion || document.hidden) return;
+  const node = el('div', 'float', `+${total}`);
+  $('#stage').append(node);
+  node.addEventListener('animationend', () => node.remove(), { once: true });
+  setTimeout(() => node.remove(), 2000); // au cas où l'animation ne se termine pas
 }
 
 /** Aucune partie en cours : on explique quoi faire. */
@@ -60,25 +126,43 @@ function renderIdle() {
   $('#roster').replaceChildren();
   $('#foot').replaceChildren();
   lastEventId = 0;
+  previous.playerId = null;
+  previous.score = null;
+  previous.darts = 0;
+  previous.turnNo = null;
+  previous.floatedTurn = null;
+  previousScores = new Map();
 }
 
 function renderStage() {
   const stage = $('#stage');
-  if (!stage.querySelector('#who')) stage.replaceChildren(...stageNodes());
+  const rebuilt = !stage.querySelector('#who');
+  if (rebuilt) stage.replaceChildren(...stageNodes());
   const current = view.current;
+  const thrown = view.turn?.darts ?? [];
+  const sameTurn = !rebuilt && previous.playerId === current.playerId && previous.turnNo === view.turnNo;
 
   $('#turnLabel').textContent = view.status === 'paused' ? 'Partie en pause' : 'Au tour de';
   $('#who').textContent = current.name ?? '—';
-  $('#score').textContent = current.score;
   $('#sub').textContent = `${current.dartsLeft} fléchette${current.dartsLeft > 1 ? 's' : ''} restante${current.dartsLeft > 1 ? 's' : ''} · tour à ${current.turnTotal}`;
+
+  // Le score défile jusqu'à sa nouvelle valeur, seulement s'il s'agit du même
+  // joueur (sinon on afficherait un décompte entre deux joueurs sans rapport).
+  rollTo($('#score'), sameTurn ? previous.score : null, current.score);
+
+  // Changement de joueur : la scène se remet en place.
+  if (!rebuilt && previous.playerId && previous.playerId !== current.playerId) replay(stage, 'turn-in');
 
   const darts = $('#darts');
   darts.replaceChildren();
-  const thrown = view.turn?.darts ?? [];
   for (let i = 0; i < 3; i++) {
     const record = thrown[i];
     const chip = el('div', 'd', record ? record.label : '·');
     if (record) chip.classList.add(record.kind === 'bust' ? 'bust' : record.kind === 'no-count' ? 'void' : 'filled');
+    // Seule la fléchette qui vient d'être saisie s'anime.
+    if (record && !reduceMotion && sameTurn && i === thrown.length - 1 && thrown.length > previous.darts) {
+      chip.classList.add('enter');
+    }
     darts.append(chip);
   }
 
@@ -141,9 +225,12 @@ function renderRoster() {
     else if (!player.entered) block.append(el('div', 'co', 'doit entrer par un double'));
     row.append(block);
 
-    row.append(el('div', 'val', player.finished ? 'Terminé' : String(player.score)));
+    const value = el('div', 'val', player.finished ? 'Terminé' : String(player.score));
+    if (previousScores.has(player.id) && previousScores.get(player.id) !== player.score) replay(value, 'pop');
+    row.append(value);
     roster.append(row);
   }
+  previousScores = new Map(view.players.map((p) => [p.id, p.score]));
 }
 
 function renderFoot() {
@@ -170,7 +257,10 @@ function playEvents(events) {
 }
 
 function playEvent(event) {
-  if (event.type === 'bust') return flash('BUST', event.playerName ?? '', 'bad');
+  if (event.type === 'bust') {
+    replay($('#stage'), 'shake');
+    return flash('BUST', event.playerName ?? '', 'bad');
+  }
   if (event.type === 'checkout') {
     const player = view.players.find((p) => p.id === event.playerId);
     const rank = player?.rank ?? view.ranking.length;

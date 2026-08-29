@@ -175,3 +175,110 @@ html, body { height: 100%; overflow: hidden; }
   .tv-main { grid-template-columns: 1fr; }
   .tv-foot { display: none; }
 }
+
+/* ── Animations : donner un peu de vie au tableau ────────────────────────── */
+
+/* Le score du joueur actif défile jusqu'à sa nouvelle valeur, puis pulse ;
+   les scores de la colonne de droite pulsent aussi quand ils changent. */
+.pop { animation: pop .38s cubic-bezier(.22, 1.2, .36, 1); }
+
+@keyframes pop {
+  0% { transform: scale(1); }
+  38% { transform: scale(1.055); }
+  100% { transform: scale(1); }
+}
+
+/* Chaque fléchette saisie apparaît en tombant sur la ligne. */
+.tv-darts .d.enter { animation: chip-in .34s cubic-bezier(.2, 1.35, .38, 1); }
+
+@keyframes chip-in {
+  0% { opacity: 0; transform: translateY(-18px) scale(.72) rotate(-6deg); }
+  60% { opacity: 1; transform: translateY(0) scale(1.06) rotate(1deg); }
+  100% { opacity: 1; transform: none; }
+}
+
+/* Changement de joueur : la scène se remet en place. */
+.stage.turn-in { animation: turn-in .42s cubic-bezier(.2, .9, .3, 1); }
+
+@keyframes turn-in {
+  0% { opacity: .25; transform: translateX(-14px); }
+  100% { opacity: 1; transform: none; }
+}
+
+/* Total du tour qui s'envole au-dessus du score. */
+.stage .float {
+  position: absolute;
+  left: 50%;
+  bottom: 34%;
+  font-size: clamp(1.6rem, 3.6vw, 3.4rem);
+  font-weight: 800;
+  color: var(--green);
+  text-shadow: 0 0 24px rgba(63, 185, 107, .45);
+  pointer-events: none;
+  animation: float-up 1.25s cubic-bezier(.2, .8, .3, 1) forwards;
+}
+
+@keyframes float-up {
+  0% { opacity: 0; transform: translate(-50%, 14px) scale(.85); }
+  22% { opacity: 1; transform: translate(-50%, -6px) scale(1); }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -70px) scale(1); }
+}
+
+/* Le joueur actif respire doucement — visible de loin sans distraire. */
+.pl.active { animation: breathe 3.2s ease-in-out infinite; }
+
+@keyframes breathe {
+  0%, 100% { box-shadow: 0 0 0 rgba(242, 181, 68, 0); }
+  50% { box-shadow: 0 0 26px rgba(242, 181, 68, .18); }
+}
+
+/* Un Bust secoue la scène. */
+.stage.shake { animation: shake .42s cubic-bezier(.36, .07, .19, .97); }
+
+@keyframes shake {
+  10%, 90% { transform: translateX(-3px); }
+  20%, 80% { transform: translateX(6px); }
+  30%, 50%, 70% { transform: translateX(-10px); }
+  40%, 60% { transform: translateX(10px); }
+}
+
+/* Halo derrière les grosses annonces (180, checkout). */
+.flash .rays {
+  position: absolute;
+  inset: -20%;
+  background: conic-gradient(from 0deg,
+    rgba(242, 181, 68, .22) 0deg, transparent 12deg, transparent 30deg,
+    rgba(242, 181, 68, .22) 42deg, transparent 54deg, transparent 72deg);
+  opacity: 0;
+}
+
+.flash.show .rays { animation: rays 2.2s ease-out forwards; }
+.flash.win .rays { filter: hue-rotate(70deg); }
+.flash.bad .rays { display: none; }
+
+@keyframes rays {
+  0% { opacity: 0; transform: rotate(0deg) scale(.7); }
+  18% { opacity: .9; }
+  70% { opacity: .5; }
+  100% { opacity: 0; transform: rotate(38deg) scale(1.15); }
+}
+
+.flash .big { animation: none; }
+.flash.show .big { animation: punch .5s cubic-bezier(.2, 1.4, .3, 1); }
+
+@keyframes punch {
+  0% { transform: scale(.55) rotate(-4deg); }
+  55% { transform: scale(1.08) rotate(1.5deg); }
+  100% { transform: none; }
+}
+
+/* Respect du réglage système « réduire les animations ». */
+@media (prefers-reduced-motion: reduce) {
+  .pop, .tv-darts .d.enter, .stage.turn-in, .stage.shake,
+  .pl.active, .flash.show .rays, .flash.show .big, .stage .float {
+    animation: none;
+  }
+  .flash.show { animation: fade-only 2.2s ease-out forwards; }
+  @keyframes fade-only { 0%, 90% { opacity: 1; } 100% { opacity: 0; } }
+}
