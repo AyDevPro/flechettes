@@ -27,18 +27,28 @@
     </div>
   </header>
 
-  <main class="tv-main">
+  <main class="tv-main" id="main">
     <section class="stage" id="stage"></section>
-    <section class="roster" id="roster"></section>
+    <section class="side">
+      <div class="roster" id="roster"></div>
+      <div class="status" id="status"></div>
+    </section>
   </main>
 
   <footer class="tv-foot" id="foot"></footer>
 </div>
 
+<!-- Voile rouge d'un Bust -->
+<div class="redflash" id="redflash"></div>
+
+<!-- Grande annonce : 180, checkout, bust -->
 <div class="flash" id="flash">
-  <div class="rays"></div>
-  <div><div class="big" id="flashBig"></div><div class="small" id="flashSmall"></div></div>
+  <div class="rays" id="flashRays"></div>
+  <div class="sub" id="flashSub"></div>
+  <div class="big" id="flashBig"></div>
+  <div class="foot" id="flashFoot"></div>
 </div>
+
 <script type="module" src="/js/tv.js"></script>
 </body>
 </html>

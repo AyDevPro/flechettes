@@ -2,6 +2,10 @@
 
 html, body { height: 100%; overflow: hidden; }
 
+:root {
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
 .tv {
   height: 100vh;
   display: grid;
@@ -22,18 +26,19 @@ html, body { height: 100%; overflow: hidden; }
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 999px;
-  padding: .25em .8em;
-  font-size: clamp(.6rem, 1vw, .95rem);
+  padding: .3em .85em;
+  font-family: var(--mono);
+  font-size: clamp(.55rem, .85vw, .8rem);
   color: var(--muted);
-  letter-spacing: .06em;
+  letter-spacing: .16em;
   text-transform: uppercase;
   white-space: nowrap;
 }
 
 .tv-head .spacer { flex: 1; }
 .tv-head .join { display: flex; align-items: center; gap: clamp(8px, 1vw, 16px); }
-.tv-head .join .code { font-size: clamp(1.4rem, 2.6vw, 2.8rem); font-weight: 800; letter-spacing: .16em; color: var(--gold); }
-.tv-head .join .cap { font-size: clamp(.55rem, .85vw, .8rem); color: var(--muted); text-transform: uppercase; letter-spacing: .12em; }
+.tv-head .join .code { font-family: var(--mono); font-size: clamp(1.1rem, 1.9vw, 2rem); font-weight: 600; letter-spacing: .06em; color: var(--gold); }
+.tv-head .join .cap { font-family: var(--mono); font-size: clamp(.5rem, .8vw, .75rem); color: var(--muted); text-transform: uppercase; letter-spacing: .2em; }
 .tv-head .qr { background: #fff; border-radius: 8px; padding: 5px; width: clamp(56px, 6vw, 104px); margin: 0; }
 
 /* ── Corps ───────────────────────────────────────────────────────────────── */
@@ -54,10 +59,16 @@ html, body { height: 100%; overflow: hidden; }
   min-height: 0;
 }
 
-.stage .turn-label { font-size: clamp(.6rem, 1vw, .95rem); letter-spacing: .2em; text-transform: uppercase; color: var(--gold); }
+.stage .turn-label { font-family: var(--mono); font-size: clamp(.6rem, .95vw, .95rem); letter-spacing: .24em; text-transform: uppercase; color: var(--gold); }
 .stage .who { font-size: clamp(1.6rem, 3.6vw, 4rem); font-weight: 800; line-height: 1.05; margin-top: .1em; }
-.stage .big { font-size: clamp(4.5rem, 15vw, 15rem); font-weight: 800; line-height: .92; letter-spacing: -.05em; margin: .04em 0; }
-.stage .sub { color: var(--muted); font-size: clamp(.7rem, 1.1vw, 1.1rem); letter-spacing: .06em; text-transform: uppercase; }
+.stage .sub { font-family: var(--mono); color: var(--muted); font-size: clamp(.65rem, 1vw, 1rem); letter-spacing: .2em; text-transform: uppercase; }
+
+/* Le score et, à côté, les points retirés par la dernière fléchette. */
+.score-row { display: flex; align-items: flex-end; gap: clamp(8px, 1.6vw, 28px); margin: .05em 0; }
+.score-box { position: relative; line-height: .88; }
+.score-box .rings { position: absolute; inset: 0; pointer-events: none; }
+.delta-slot { display: flex; align-items: flex-end; min-width: 0; }
+.stage .big { font-size: clamp(4.5rem, 15vw, 15rem); font-weight: 800; letter-spacing: -.05em; }
 
 .tv-darts { display: flex; gap: clamp(6px, .8vw, 14px); margin: clamp(8px, 1.4vh, 20px) 0; }
 
@@ -78,14 +89,23 @@ html, body { height: 100%; overflow: hidden; }
 .tv-darts .d.bust { border-color: var(--red); color: var(--red); background: #2b1614; }
 
 .tv-reco { border-top: 1px solid var(--line); padding-top: clamp(6px, 1.2vh, 16px); }
-.tv-reco .cap { font-size: clamp(.55rem, .9vw, .85rem); letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+.tv-reco .cap { font-family: var(--mono); font-size: clamp(.55rem, .85vw, .8rem); letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
 .tv-reco .route { font-size: clamp(1.4rem, 3.4vw, 3.6rem); font-weight: 800; color: var(--gold); line-height: 1.1; }
 
-/* ── Colonne des joueurs ─────────────────────────────────────────────────── */
+/* ── Colonne des joueurs (classement animé) ──────────────────────────────── */
 
-.roster { display: flex; flex-direction: column; justify-content: center; gap: clamp(5px, .8vh, 12px); min-height: 0; overflow: hidden; }
+.side { display: flex; flex-direction: column; min-height: 0; gap: clamp(6px, 1vh, 14px); }
+.roster { position: relative; flex: 1; min-height: 0; }
+.status { font-family: var(--mono); font-size: clamp(.55rem, .85vw, .85rem); letter-spacing: .2em; text-transform: uppercase; color: #5f6f6e; text-align: right; }
 
 .pl {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--pl-top, 0px);
+  height: var(--pl-h, 70px);
+  transform: translateY(calc(var(--rank, 0) * (var(--pl-h, 70px) + var(--pl-gap, 10px))));
+  transition: transform .62s cubic-bezier(.22, 1.3, .3, 1), background .4s ease, border-color .4s ease, opacity .4s ease;
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
@@ -94,20 +114,20 @@ html, body { height: 100%; overflow: hidden; }
   border: 1px solid var(--line);
   border-left: 5px solid transparent;
   border-radius: 14px;
-  padding: clamp(6px, 1.1vh, 16px) clamp(10px, 1.2vw, 20px);
-  transition: background .2s, border-color .2s, transform .2s;
+  padding: 0 clamp(10px, 1.2vw, 20px);
+  overflow: hidden;
 }
 
-.pl .pos { font-size: clamp(.7rem, 1.1vw, 1.1rem); font-weight: 800; color: var(--muted); width: 1.6em; text-align: center; }
+.pl .pos { font-family: var(--mono); font-size: clamp(.65rem, 1vw, 1rem); font-weight: 700; color: var(--muted); width: 2em; text-align: center; }
 .pl .name { font-size: clamp(1rem, 1.9vw, 2rem); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pl .co { font-size: clamp(.6rem, .95vw, .95rem); color: var(--gold); letter-spacing: .04em; margin-top: .15em; }
-.pl .val { font-size: clamp(1.6rem, 3.2vw, 3.4rem); font-weight: 800; letter-spacing: -.03em; }
+.pl .co { font-family: var(--mono); font-size: clamp(.55rem, .85vw, .9rem); color: var(--gold); letter-spacing: .08em; margin-top: .15em; }
+.pl .val { font-size: clamp(1.4rem, 3vw, 3.2rem); font-weight: 800; letter-spacing: -.03em; }
 
-.pl.active { border-left-color: var(--gold); background: #22303c; transform: translateX(4px); }
+.pl.active { border-left-color: var(--gold); background: linear-gradient(90deg, rgba(242, 181, 68, .14), var(--panel) 60%); }
 .pl.active .val { color: var(--gold); }
-.pl.done { border-left-color: var(--green); opacity: .8; }
-.pl.done .val { color: var(--green); font-size: clamp(1rem, 1.6vw, 1.6rem); }
-.pl.out { opacity: .35; }
+.pl.done { border-left-color: var(--green); opacity: .82; }
+.pl.done .val { color: var(--green); font-size: clamp(.9rem, 1.5vw, 1.5rem); }
+.pl.out { opacity: .3; }
 
 /* ── Pied : derniers tours ───────────────────────────────────────────────── */
 
@@ -128,6 +148,10 @@ html, body { height: 100%; overflow: hidden; }
   white-space: nowrap;
 }
 
+/* Seule la volée qui vient d'entrer s'anime — sinon le pied clignoterait à
+   chaque fléchette. */
+.tv-foot .h.in { animation: row-in .4s ease-out; }
+
 .tv-foot .h b { color: var(--text); font-weight: 700; }
 .tv-foot .h .t { margin-left: auto; font-weight: 800; color: var(--text); font-size: 1.15em; }
 .tv-foot .h.bust { border-color: var(--red); }
@@ -135,150 +159,248 @@ html, body { height: 100%; overflow: hidden; }
 .tv-foot .h.win { border-color: var(--green); }
 .tv-foot .h.win .t { color: var(--green); }
 
-/* ── Animations ──────────────────────────────────────────────────────────── */
-
-.flash {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  pointer-events: none;
-  opacity: 0;
-  z-index: 20;
-  background: radial-gradient(circle at center, rgba(0, 0, 0, .82) 0%, rgba(0, 0, 0, .55) 60%, transparent 100%);
-}
-
-.flash.show { animation: flash 2.2s ease-out forwards; }
-.flash .big { font-size: clamp(3rem, 14vw, 14rem); font-weight: 900; letter-spacing: -.04em; line-height: .9; text-align: center; }
-.flash .small { font-size: clamp(1rem, 3vw, 3rem); font-weight: 700; color: var(--muted); text-align: center; margin-top: .2em; }
-.flash.good .big { color: var(--gold); text-shadow: 0 0 40px rgba(242, 181, 68, .5); }
-.flash.bad .big { color: var(--red); text-shadow: 0 0 40px rgba(224, 75, 60, .45); }
-.flash.win .big { color: var(--green); text-shadow: 0 0 50px rgba(63, 185, 107, .5); }
-
-@keyframes flash {
-  0% { opacity: 0; transform: scale(.82); }
-  12% { opacity: 1; transform: scale(1.04); }
-  22% { transform: scale(1); }
-  78% { opacity: 1; }
-  100% { opacity: 0; transform: scale(1.02); }
-}
-
 .final { text-align: center; }
 .final h2 { font-size: clamp(1.4rem, 3vw, 3rem); margin-bottom: .4em; }
 .final ol { list-style: none; margin: 0 auto; padding: 0; display: inline-grid; gap: .4em; text-align: left; }
-.final li { font-size: clamp(1rem, 2.2vw, 2.2rem); font-weight: 700; }
+.final li { font-size: clamp(1rem, 2.2vw, 2.2rem); font-weight: 700; animation: row-in .5s ease-out backwards; }
 .final li .m { color: var(--gold); margin-right: .5em; }
 
 .offline { position: fixed; top: 0; left: 0; right: 0; background: var(--red); color: #fff; text-align: center; padding: 6px; font-size: .9rem; z-index: 40; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Animations — d'après la maquette « Animations Score TV »
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* 01 · Impact fléchette : anneau qui se propage depuis le score. */
+.ring {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: clamp(90px, 20vh, 260px);
+  height: clamp(90px, 20vh, 260px);
+  margin: calc(clamp(90px, 20vh, 260px) / -2);
+  border-radius: 50%;
+  border: 6px solid rgba(242, 181, 68, .8);
+  pointer-events: none;
+  animation: ring-out .85s ease-out forwards;
+}
+
+@keyframes ring-out {
+  0% { transform: scale(.35); opacity: .75; border-width: 6px; }
+  100% { transform: scale(2.1); opacity: 0; border-width: 1px; }
+}
+
+/* 01 · Points retirés, qui s'envolent à côté du score. */
+.delta {
+  font-size: clamp(1.4rem, 3.4vw, 3.4rem);
+  font-weight: 800;
+  color: var(--gold);
+  margin-bottom: clamp(6px, 4vh, 48px);
+  white-space: nowrap;
+  animation: float-up 1.1s cubic-bezier(.2, .8, .2, 1) forwards;
+}
+
+@keyframes float-up {
+  0% { transform: translateY(14px) scale(.8); opacity: 0; }
+  25% { transform: translateY(0) scale(1.08); opacity: 1; }
+  70% { transform: translateY(-10px) scale(1); opacity: 1; }
+  100% { transform: translateY(-42px) scale(.9); opacity: 0; }
+}
+
+/* Le score pulse à chaque changement. */
+.pop { animation: score-pulse .4s ease-out; }
+
+@keyframes score-pulse {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.07); }
+  100% { transform: scale(1); }
+}
+
+/* Chaque fléchette saisie apparaît d'un coup. */
+.tv-darts .d.enter { animation: chip-pop .42s cubic-bezier(.2, 1.4, .3, 1); }
+
+@keyframes chip-pop {
+  0% { transform: scale(.5); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* 02 · Volée validée : un balayage doré traverse le panneau. */
+.sweep {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 34%;
+  background: linear-gradient(90deg, transparent, rgba(242, 181, 68, .28), transparent);
+  pointer-events: none;
+  animation: sweep 1.1s ease-in-out forwards;
+}
+
+@keyframes sweep {
+  0% { transform: translateX(-120%) skewX(-18deg); opacity: 0; }
+  25% { opacity: .9; }
+  100% { transform: translateX(220%) skewX(-18deg); opacity: 0; }
+}
+
+/* 06 · Changement de tour : la scène se remet en place. */
+.stage.turn-in { animation: turn-in .42s cubic-bezier(.2, .9, .3, 1); }
+
+@keyframes turn-in {
+  0% { opacity: .3; transform: translateX(-12px); }
+  100% { opacity: 1; transform: none; }
+}
+
+/* 06 · La ligne qui vient de changer de place s'illumine. */
+.pl.glow { animation: glow-row 1.2s ease-out; }
+
+@keyframes glow-row {
+  0% { box-shadow: 0 0 0 0 rgba(242, 181, 68, 0); }
+  40% { box-shadow: 0 0 0 5px rgba(242, 181, 68, .3), 0 0 60px rgba(242, 181, 68, .45); }
+  100% { box-shadow: 0 0 0 0 rgba(242, 181, 68, 0); }
+}
+
+@keyframes row-in {
+  0% { transform: translateY(14px); opacity: 0; }
+  100% { transform: none; opacity: 1; }
+}
+
+/* 04 · Bust : voile rouge + secousse de l'écran. */
+.redflash {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(60% 60% at 50% 50%, rgba(214, 60, 48, .9), rgba(120, 20, 14, .5) 70%, transparent);
+}
+
+.redflash.show { animation: flash-red .8s ease-out forwards; }
+
+@keyframes flash-red {
+  0% { opacity: 0; }
+  18% { opacity: .85; }
+  100% { opacity: 0; }
+}
+
+.shake { animation: shake .62s cubic-bezier(.36, .07, .19, .97); }
+
+@keyframes shake {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  12% { transform: translate3d(-9px, 3px, 0) rotate(-.25deg); }
+  28% { transform: translate3d(8px, -4px, 0) rotate(.25deg); }
+  44% { transform: translate3d(-6px, 2px, 0); }
+  62% { transform: translate3d(5px, -2px, 0); }
+  80% { transform: translate3d(-3px, 1px, 0); }
+}
+
+/* 03 & 05 · Grande annonce : 180, checkout, bust. */
+.flash {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(6px, 1.6vh, 22px);
+  pointer-events: none;
+  backdrop-filter: blur(3px);
+  background: radial-gradient(60% 60% at 50% 50%, rgba(22, 17, 4, .9), rgba(5, 11, 9, .8));
+}
+
+.flash.show { display: flex; }
+.flash.out { animation: overlay-out .4s ease-in forwards; }
+.flash.bad { background: radial-gradient(60% 60% at 50% 50%, rgba(60, 8, 6, .88), rgba(5, 11, 9, .72)); }
+
+.flash .sub {
+  font-family: var(--mono);
+  font-size: clamp(.7rem, 1.2vw, 1.2rem);
+  letter-spacing: .4em;
+  text-indent: .4em;
+  color: var(--gold);
+  animation: dash-in .5s ease-out;
+}
+
+.flash .big {
+  font-size: clamp(4rem, 16vw, 16rem);
+  font-weight: 900;
+  letter-spacing: -.05em;
+  line-height: .82;
+  text-align: center;
+  color: var(--gold);
+  text-shadow: 0 0 8vh rgba(242, 181, 68, .35);
+  animation: overlay-in .55s cubic-bezier(.2, 1.3, .3, 1);
+}
+
+.flash .foot {
+  font-family: var(--mono);
+  font-size: clamp(.6rem, 1.1vw, 1.1rem);
+  letter-spacing: .3em;
+  text-indent: .3em;
+  color: #9fb0af;
+  text-align: center;
+  animation: dash-in .5s ease-out .1s backwards;
+}
+
+.flash.bad .sub, .flash.bad .big { color: var(--red); }
+.flash.bad .big { text-shadow: 0 0 8vh rgba(224, 75, 60, .35); }
+.flash.win .sub, .flash.win .big { color: var(--green); }
+.flash.win .big { text-shadow: 0 0 8vh rgba(63, 185, 107, .4); }
+
+@keyframes overlay-in {
+  0% { transform: scale(.72); opacity: 0; }
+  55% { transform: scale(1.04); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes overlay-out {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.14); }
+}
+
+@keyframes dash-in {
+  0% { transform: translateY(18px); opacity: 0; }
+  100% { transform: none; opacity: 1; }
+}
+
+/* Rayons derrière l'annonce (180, checkout). */
+.rays { position: absolute; inset: 0; pointer-events: none; }
+
+.ray {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: .5vw;
+  margin-left: -.25vw;
+  border-radius: 99px;
+  transform-origin: 50% 100%;
+  transform: rotate(var(--deg)) translateY(-14vh);
+  background: linear-gradient(180deg, transparent, currentColor);
+  color: var(--gold);
+  animation: ray-out 1.1s ease-out forwards;
+}
+
+.flash.win .ray { color: var(--green); }
+
+@keyframes ray-out {
+  0% { opacity: 0; height: 6vh; }
+  30% { opacity: .95; }
+  100% { opacity: 0; height: 30vh; }
+}
 
 @media (max-width: 900px) {
   .tv-main { grid-template-columns: 1fr; }
   .tv-foot { display: none; }
 }
 
-/* ── Animations : donner un peu de vie au tableau ────────────────────────── */
-
-/* Le score du joueur actif défile jusqu'à sa nouvelle valeur, puis pulse ;
-   les scores de la colonne de droite pulsent aussi quand ils changent. */
-.pop { animation: pop .38s cubic-bezier(.22, 1.2, .36, 1); }
-
-@keyframes pop {
-  0% { transform: scale(1); }
-  38% { transform: scale(1.055); }
-  100% { transform: scale(1); }
-}
-
-/* Chaque fléchette saisie apparaît en tombant sur la ligne. */
-.tv-darts .d.enter { animation: chip-in .34s cubic-bezier(.2, 1.35, .38, 1); }
-
-@keyframes chip-in {
-  0% { opacity: 0; transform: translateY(-18px) scale(.72) rotate(-6deg); }
-  60% { opacity: 1; transform: translateY(0) scale(1.06) rotate(1deg); }
-  100% { opacity: 1; transform: none; }
-}
-
-/* Changement de joueur : la scène se remet en place. */
-.stage.turn-in { animation: turn-in .42s cubic-bezier(.2, .9, .3, 1); }
-
-@keyframes turn-in {
-  0% { opacity: .25; transform: translateX(-14px); }
-  100% { opacity: 1; transform: none; }
-}
-
-/* Total du tour qui s'envole au-dessus du score. */
-.stage .float {
-  position: absolute;
-  left: 50%;
-  bottom: 34%;
-  font-size: clamp(1.6rem, 3.6vw, 3.4rem);
-  font-weight: 800;
-  color: var(--green);
-  text-shadow: 0 0 24px rgba(63, 185, 107, .45);
-  pointer-events: none;
-  animation: float-up 1.25s cubic-bezier(.2, .8, .3, 1) forwards;
-}
-
-@keyframes float-up {
-  0% { opacity: 0; transform: translate(-50%, 14px) scale(.85); }
-  22% { opacity: 1; transform: translate(-50%, -6px) scale(1); }
-  75% { opacity: 1; }
-  100% { opacity: 0; transform: translate(-50%, -70px) scale(1); }
-}
-
-/* Le joueur actif respire doucement — visible de loin sans distraire. */
-.pl.active { animation: breathe 3.2s ease-in-out infinite; }
-
-@keyframes breathe {
-  0%, 100% { box-shadow: 0 0 0 rgba(242, 181, 68, 0); }
-  50% { box-shadow: 0 0 26px rgba(242, 181, 68, .18); }
-}
-
-/* Un Bust secoue la scène. */
-.stage.shake { animation: shake .42s cubic-bezier(.36, .07, .19, .97); }
-
-@keyframes shake {
-  10%, 90% { transform: translateX(-3px); }
-  20%, 80% { transform: translateX(6px); }
-  30%, 50%, 70% { transform: translateX(-10px); }
-  40%, 60% { transform: translateX(10px); }
-}
-
-/* Halo derrière les grosses annonces (180, checkout). */
-.flash .rays {
-  position: absolute;
-  inset: -20%;
-  background: conic-gradient(from 0deg,
-    rgba(242, 181, 68, .22) 0deg, transparent 12deg, transparent 30deg,
-    rgba(242, 181, 68, .22) 42deg, transparent 54deg, transparent 72deg);
-  opacity: 0;
-}
-
-.flash.show .rays { animation: rays 2.2s ease-out forwards; }
-.flash.win .rays { filter: hue-rotate(70deg); }
-.flash.bad .rays { display: none; }
-
-@keyframes rays {
-  0% { opacity: 0; transform: rotate(0deg) scale(.7); }
-  18% { opacity: .9; }
-  70% { opacity: .5; }
-  100% { opacity: 0; transform: rotate(38deg) scale(1.15); }
-}
-
-.flash .big { animation: none; }
-.flash.show .big { animation: punch .5s cubic-bezier(.2, 1.4, .3, 1); }
-
-@keyframes punch {
-  0% { transform: scale(.55) rotate(-4deg); }
-  55% { transform: scale(1.08) rotate(1.5deg); }
-  100% { transform: none; }
-}
-
 /* Respect du réglage système « réduire les animations ». */
 @media (prefers-reduced-motion: reduce) {
-  .pop, .tv-darts .d.enter, .stage.turn-in, .stage.shake,
-  .pl.active, .flash.show .rays, .flash.show .big, .stage .float {
+  .pop, .tv-darts .d.enter, .stage.turn-in, .shake, .pl.glow, .ring, .sweep,
+  .delta, .flash .big, .flash .sub, .flash .foot, .ray, .redflash.show,
+  .tv-foot .h.in, .final li {
     animation: none;
   }
-  .flash.show { animation: fade-only 2.2s ease-out forwards; }
-  @keyframes fade-only { 0%, 90% { opacity: 1; } 100% { opacity: 0; } }
+  .pl { transition: none; }
+  .ring, .sweep, .ray, .delta { display: none; }
 }

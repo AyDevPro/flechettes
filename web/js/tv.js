@@ -1,15 +1,27 @@
-/* Tableau d'affichage TV : lisible à plusieurs mètres, mis à jour en direct. */
+/*
+ * Tableau d'affichage TV : lisible à plusieurs mètres, mis à jour en direct.
+ *
+ * Les animations reprennent la maquette « Animations Score TV » :
+ *   01 impact fléchette (anneau + points retirés qui s'envolent)
+ *   02 volée validée (balayage doré sur le panneau)
+ *   03 TON 80 / gros score (annonce plein écran + rayons)
+ *   04 Bust (voile rouge + secousse)
+ *   05 checkout (annonce verte, rayons, ligne du joueur illuminée)
+ *   06 changement de tour (classement qui se réordonne)
+ */
 
 import { $, RULE_LABELS, connect, el, loadQr } from './common.js';
 
-let lastEventId = 0;
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 let view = null;
+let lastEventId = 0;
 
 /** Mémoire du dernier rendu : sert à n'animer que ce qui vient de changer. */
-const previous = { playerId: null, score: null, darts: 0, turnNo: null, floatedTurn: null };
-/** Dernier score connu de chaque joueur, pour n'animer que les lignes qui bougent. */
-let previousScores = new Map();
-const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const previous = { playerId: null, score: null, darts: 0, turnNo: null, historyTurn: null };
+let previousRank = new Map();
+/** Lignes de la colonne des joueurs, réutilisées pour que le classement glisse. */
+const rows = new Map();
 
 $('#url').textContent = location.host;
 loadQr($('#qr'), `${location.origin}/`);
@@ -21,6 +33,8 @@ connect({
   onClose: showOffline,
 });
 
+addEventListener('resize', () => { if (view) layoutRoster(); });
+
 function showOffline() {
   if (document.querySelector('.offline')) return;
   document.body.append(el('div', 'offline', 'Connexion au serveur perdue — reconnexion…'));
@@ -31,7 +45,7 @@ function showOffline() {
 function render(next) {
   const first = !view;
   view = next;
-  document.querySelector('.tv-main').classList.toggle('idle', !view);
+  $('#main').classList.toggle('idle', !view);
 
   if (!view) return renderIdle();
 
@@ -43,74 +57,27 @@ function render(next) {
   );
 
   if (view.status === 'finished') renderFinal();
-  else renderStage();
+  else renderStage(first);
 
-  renderRoster();
-  renderFoot();
+  renderRoster(first);
+  renderFoot(!first && view.history[0] && view.history[0].turnNo !== previous.historyTurn);
+  renderStatus();
 
   const events = view.events ?? [];
   if (first) lastEventId = events.at(-1)?.id ?? 0;
   else playEvents(events);
 
-  // Total du tour qui vient de s'achever (les gros scores ont déjà leur annonce).
+  // 02 · Une volée vient d'être validée : balayage sur le panneau.
   const last = view.history[0];
-  if (last && last.turnNo !== previous.floatedTurn) {
-    // Les gros scores et les Busts ont déjà leur annonce plein écran.
-    if (!first && !last.busted && last.total > 0 && last.total < 100) floatTotal(last.total);
-    previous.floatedTurn = last.turnNo;
+  if (last && last.turnNo !== previous.historyTurn) {
+    if (!first && !last.busted) sweep();
+    previous.historyTurn = last.turnNo;
   }
 
   previous.playerId = view.current.playerId;
   previous.score = view.current.score;
   previous.darts = view.turn?.darts.length ?? 0;
   previous.turnNo = view.turnNo;
-}
-
-/** Fait défiler un nombre d'une valeur à l'autre, puis le fait pulser. */
-let rollFrame = null;
-let rollGuard = null;
-function rollTo(node, from, to) {
-  cancelAnimationFrame(rollFrame);
-  clearTimeout(rollGuard);
-  // Onglet en arrière-plan : requestAnimationFrame est gelé, on affiche la
-  // valeur finale directement plutôt que de laisser un score figé à l'écran.
-  if (reduceMotion || document.hidden || from === null || from === to) {
-    node.textContent = to;
-    return;
-  }
-  replay(node, 'pop');
-  const duration = Math.min(620, 200 + Math.abs(to - from) * 3.2);
-  const start = performance.now();
-  const step = (now) => {
-    const k = Math.min(1, (now - start) / duration);
-    const eased = 1 - (1 - k) ** 3;
-    node.textContent = Math.round(from + (to - from) * eased);
-    if (k < 1) rollFrame = requestAnimationFrame(step);
-    else node.textContent = to;
-  };
-  rollFrame = requestAnimationFrame(step);
-  // Filet de sécurité : quoi qu'il arrive, le vrai score finit par s'afficher.
-  rollGuard = setTimeout(() => {
-    cancelAnimationFrame(rollFrame);
-    node.textContent = to;
-  }, duration + 400);
-}
-
-/** Rejoue une animation CSS même si la classe est déjà posée. */
-function replay(node, className) {
-  if (reduceMotion) return;
-  node.classList.remove(className);
-  void node.offsetWidth; // force le navigateur à repartir de zéro
-  node.classList.add(className);
-  node.addEventListener('animationend', () => node.classList.remove(className), { once: true });
-}
-
-function floatTotal(total) {
-  if (reduceMotion || document.hidden) return;
-  const node = el('div', 'float', `+${total}`);
-  $('#stage').append(node);
-  node.addEventListener('animationend', () => node.remove(), { once: true });
-  setTimeout(() => node.remove(), 2000); // au cas où l'animation ne se termine pas
 }
 
 /** Aucune partie en cours : on explique quoi faire. */
@@ -125,33 +92,40 @@ function renderIdle() {
   $('#stage').replaceChildren(box);
   $('#roster').replaceChildren();
   $('#foot').replaceChildren();
+  $('#status').textContent = '';
+  rows.clear();
+  previousRank = new Map();
+  Object.assign(previous, { playerId: null, score: null, darts: 0, turnNo: null, historyTurn: null });
   lastEventId = 0;
-  previous.playerId = null;
-  previous.score = null;
-  previous.darts = 0;
-  previous.turnNo = null;
-  previous.floatedTurn = null;
-  previousScores = new Map();
 }
 
-function renderStage() {
+function renderStage(first) {
   const stage = $('#stage');
-  const rebuilt = !stage.querySelector('#who');
+  const rebuilt = !stage.querySelector('#score');
   if (rebuilt) stage.replaceChildren(...stageNodes());
+
   const current = view.current;
   const thrown = view.turn?.darts ?? [];
-  const sameTurn = !rebuilt && previous.playerId === current.playerId && previous.turnNo === view.turnNo;
+  const sameTurn = !rebuilt && !first
+    && previous.playerId === current.playerId && previous.turnNo === view.turnNo;
 
   $('#turnLabel').textContent = view.status === 'paused' ? 'Partie en pause' : 'Au tour de';
   $('#who').textContent = current.name ?? '—';
   $('#sub').textContent = `${current.dartsLeft} fléchette${current.dartsLeft > 1 ? 's' : ''} restante${current.dartsLeft > 1 ? 's' : ''} · tour à ${current.turnTotal}`;
 
-  // Le score défile jusqu'à sa nouvelle valeur, seulement s'il s'agit du même
-  // joueur (sinon on afficherait un décompte entre deux joueurs sans rapport).
+  // Le score défile jusqu'à sa nouvelle valeur — seulement s'il s'agit du même
+  // joueur, sinon on décompterait entre deux joueurs sans rapport.
   rollTo($('#score'), sameTurn ? previous.score : null, current.score);
 
-  // Changement de joueur : la scène se remet en place.
+  // 06 · Changement de joueur : la scène se remet en place.
   if (!rebuilt && previous.playerId && previous.playerId !== current.playerId) replay(stage, 'turn-in');
+
+  // 01 · Impact de la fléchette qui vient d'être saisie.
+  const fresh = sameTurn && thrown.length > previous.darts ? thrown[thrown.length - 1] : null;
+  if (fresh) {
+    ring();
+    if (fresh.value > 0 && (fresh.kind === 'score' || fresh.kind === 'win')) showDelta(`−${fresh.value}`);
+  }
 
   const darts = $('#darts');
   darts.replaceChildren();
@@ -159,10 +133,7 @@ function renderStage() {
     const record = thrown[i];
     const chip = el('div', 'd', record ? record.label : '·');
     if (record) chip.classList.add(record.kind === 'bust' ? 'bust' : record.kind === 'no-count' ? 'void' : 'filled');
-    // Seule la fléchette qui vient d'être saisie s'anime.
-    if (record && !reduceMotion && sameTurn && i === thrown.length - 1 && thrown.length > previous.darts) {
-      chip.classList.add('enter');
-    }
+    if (record && fresh && i === thrown.length - 1 && !reduceMotion) chip.classList.add('enter');
     darts.append(chip);
   }
 
@@ -179,13 +150,17 @@ function renderStage() {
 
 /** (Re)construit la scène — elle est remplacée par le classement en fin de partie. */
 function stageNodes() {
-  const mk = (tag, cls, id) => { const n = el(tag, cls); n.id = id; return n; };
+  const mk = (tag, cls, id) => { const n = el(tag, cls); if (id) n.id = id; return n; };
+  const scoreRow = mk('div', 'score-row');
+  const box = mk('div', 'score-box');
+  box.append(mk('div', 'rings', 'rings'), mk('div', 'big', 'score'));
+  scoreRow.append(box, mk('div', 'delta-slot', 'deltaSlot'));
   const reco = mk('div', 'tv-reco', 'reco');
   reco.append(mk('div', 'cap', 'recoCap'), mk('div', 'route', 'recoRoute'));
   return [
     mk('div', 'turn-label', 'turnLabel'),
     mk('div', 'who', 'who'),
-    mk('div', 'big', 'score'),
+    scoreRow,
     mk('div', 'sub', 'sub'),
     mk('div', 'tv-darts', 'darts'),
     reco,
@@ -196,59 +171,185 @@ function renderFinal() {
   const box = el('div', 'final');
   box.append(el('h2', '', 'Classement final'));
   const list = el('ol');
-  for (const player of [...view.players].sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))) {
+  [...view.players].sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99)).forEach((player, i) => {
     const li = el('li');
+    li.style.animationDelay = `${i * 90}ms`;
     li.append(el('span', 'm', player.rank ? `${player.rank}.` : '—'), document.createTextNode(player.name));
     if (player.stats.checkout) li.append(el('span', 'm', ` (checkout ${player.stats.checkout})`));
     list.append(li);
-  }
+  });
   box.append(list);
   $('#stage').replaceChildren(box);
 }
 
-function renderRoster() {
-  const roster = $('#roster');
-  roster.replaceChildren();
-  const players = [...view.players].sort((a, b) => view.order.indexOf(a.id) - view.order.indexOf(b.id));
-  for (const player of players) {
-    const row = el('div', 'pl');
-    if (player.id === view.currentPlayerId && view.status !== 'finished') row.classList.add('active');
-    if (player.finished) row.classList.add('done');
-    if (player.removed) row.classList.add('out');
+// ── Classement (colonne de droite) ─────────────────────────────────────────
 
-    row.append(el('div', 'pos', player.rank ? `${player.rank}${player.rank === 1 ? 're' : 'e'}` : '·'));
-
-    const block = el('div');
-    block.append(el('div', 'name', player.name));
-    const hint = view.hints?.[player.id];
-    if (hint && !player.finished) block.append(el('div', 'co', hint));
-    else if (!player.entered) block.append(el('div', 'co', 'doit entrer par un double'));
-    row.append(block);
-
-    const value = el('div', 'val', player.finished ? 'Terminé' : String(player.score));
-    if (previousScores.has(player.id) && previousScores.get(player.id) !== player.score) replay(value, 'pop');
-    row.append(value);
-    roster.append(row);
-  }
-  previousScores = new Map(view.players.map((p) => [p.id, p.score]));
+/** Ordre d'affichage : terminés d'abord, puis le plus proche de zéro. */
+function ranked() {
+  return [...view.players].sort((a, b) => {
+    const bucket = (p) => (p.removed ? 2 : p.finished ? 0 : 1);
+    if (bucket(a) !== bucket(b)) return bucket(a) - bucket(b);
+    if (a.finished && b.finished) return (a.rank ?? 99) - (b.rank ?? 99);
+    if (a.score !== b.score) return a.score - b.score;
+    return view.order.indexOf(a.id) - view.order.indexOf(b.id);
+  });
 }
 
-function renderFoot() {
+function renderRoster(first) {
+  const roster = $('#roster');
+  const order = ranked();
+  const seen = new Set();
+
+  order.forEach((player, rank) => {
+    seen.add(player.id);
+    let row = rows.get(player.id);
+    if (!row) {
+      row = el('div', 'pl');
+      row.append(el('div', 'pos'), el('div', 'block'), el('div', 'val'));
+      row.querySelector('.block').append(el('div', 'name'), el('div', 'co'));
+      rows.set(player.id, row);
+      roster.append(row);
+    }
+
+    row.classList.toggle('active', player.id === view.currentPlayerId && view.status !== 'finished');
+    row.classList.toggle('done', player.finished);
+    row.classList.toggle('out', player.removed);
+    row.style.setProperty('--rank', rank);
+
+    row.querySelector('.pos').textContent = player.rank ? `${player.rank}${player.rank === 1 ? 're' : 'e'}` : '·';
+    row.querySelector('.name').textContent = player.name;
+    const hint = view.hints?.[player.id];
+    row.querySelector('.co').textContent = player.finished ? ''
+      : hint || (player.entered ? '' : 'doit entrer par un double');
+
+    const value = row.querySelector('.val');
+    const label = player.finished ? 'Terminé' : String(player.score);
+    if (value.textContent !== label) {
+      value.textContent = label;
+      if (!first) replay(value, 'pop');
+    }
+
+    // 06 · La ligne qui change de place s'illumine.
+    if (!first && previousRank.has(player.id) && previousRank.get(player.id) !== rank) replay(row, 'glow');
+  });
+
+  for (const [id, row] of rows) {
+    if (seen.has(id)) continue;
+    row.remove();
+    rows.delete(id);
+  }
+
+  previousRank = new Map(order.map((p, rank) => [p.id, rank]));
+  layoutRoster();
+}
+
+/** Répartit les lignes dans la hauteur disponible (elles sont positionnées). */
+function layoutRoster() {
+  const roster = $('#roster');
+  const count = rows.size;
+  if (!count) return;
+  const height = roster.clientHeight || 420;
+  const gap = Math.round(Math.min(14, Math.max(6, height * 0.02)));
+  const rowHeight = Math.max(34, Math.min(110, (height - gap * (count - 1)) / count));
+  const total = rowHeight * count + gap * (count - 1);
+  roster.style.setProperty('--pl-h', `${rowHeight}px`);
+  roster.style.setProperty('--pl-gap', `${gap}px`);
+  roster.style.setProperty('--pl-top', `${Math.max(0, (height - total) / 2)}px`);
+}
+
+function renderStatus() {
+  const player = view.players.find((p) => p.id === view.current.playerId);
+  const stats = player?.stats;
+  const average = stats && stats.darts > 0 ? ((stats.points / stats.darts) * 3).toFixed(1) : null;
+  $('#status').textContent = view.status === 'finished'
+    ? `${view.players.length} joueurs · ${view.turnNo} tours`
+    : `Tour ${view.turnNo}${average ? ` · moyenne ${average}` : ''}`;
+}
+
+function renderFoot(fresh) {
   const foot = $('#foot');
   foot.replaceChildren();
-  for (const turn of view.history.slice(0, 4)) {
+  view.history.slice(0, 4).forEach((turn, index) => {
     const item = el('div', 'h');
+    if (fresh && index === 0) item.classList.add('in');
     if (turn.busted) item.classList.add('bust');
     if (turn.finished) item.classList.add('win');
     item.append(el('b', '', turn.playerName), document.createTextNode(turn.labels.join(' · ') || 'tour passé'));
     item.append(el('span', 't', turn.busted ? 'BUST' : turn.finished ? '✓' : String(turn.total)));
     foot.append(item);
-  }
+  });
 }
 
-// ── Animations ─────────────────────────────────────────────────────────────
+// ── Briques d'animation ────────────────────────────────────────────────────
 
-/** Rejoue les évènements non encore vus ; seul le plus récent est animé. */
+/** Fait défiler un nombre d'une valeur à l'autre, puis le fait pulser. */
+let rollFrame = null;
+let rollGuard = null;
+function rollTo(node, from, to) {
+  cancelAnimationFrame(rollFrame);
+  clearTimeout(rollGuard);
+  // Onglet en arrière-plan : requestAnimationFrame est gelé, on affiche
+  // directement la valeur finale plutôt que de laisser un score figé.
+  if (reduceMotion || document.hidden || from === null || from === to) {
+    node.textContent = to;
+    return;
+  }
+  replay(node, 'pop');
+  const duration = Math.min(620, 200 + Math.abs(to - from) * 3.2);
+  const start = performance.now();
+  const step = (now) => {
+    const k = Math.min(1, (now - start) / duration);
+    node.textContent = Math.round(from + (to - from) * (1 - (1 - k) ** 3));
+    if (k < 1) rollFrame = requestAnimationFrame(step);
+    else node.textContent = to;
+  };
+  rollFrame = requestAnimationFrame(step);
+  rollGuard = setTimeout(() => { cancelAnimationFrame(rollFrame); node.textContent = to; }, duration + 400);
+}
+
+/** Rejoue une animation CSS même si la classe est déjà posée. */
+function replay(node, className) {
+  if (reduceMotion) return;
+  node.classList.remove(className);
+  void node.offsetWidth; // force le navigateur à repartir de zéro
+  node.classList.add(className);
+  node.addEventListener('animationend', () => node.classList.remove(className), { once: true });
+}
+
+/** Élément éphémère : il se retire tout seul, animation terminée ou non. */
+function ephemeral(parent, node, ms) {
+  if (!parent) return;
+  parent.append(node);
+  node.addEventListener('animationend', () => node.remove(), { once: true });
+  setTimeout(() => node.remove(), ms);
+}
+
+function ring() {
+  if (reduceMotion || document.hidden) return;
+  ephemeral($('#rings'), el('div', 'ring'), 1400);
+}
+
+function showDelta(text) {
+  if (reduceMotion || document.hidden) return;
+  const slot = $('#deltaSlot');
+  slot?.replaceChildren();
+  ephemeral(slot, el('div', 'delta', text), 1600);
+}
+
+function sweep() {
+  if (reduceMotion || document.hidden) return;
+  ephemeral($('#stage'), el('div', 'sweep'), 1600);
+}
+
+function shake() {
+  if (reduceMotion) return;
+  replay($('#main'), 'shake');
+  replay($('#redflash'), 'show');
+}
+
+// ── Grandes annonces ───────────────────────────────────────────────────────
+
+/** Rejoue les évènements non encore vus ; seul le plus récent est annoncé. */
 function playEvents(events) {
   const fresh = events.filter((e) => e.id > lastEventId);
   if (fresh.length === 0) return;
@@ -257,30 +358,75 @@ function playEvents(events) {
 }
 
 function playEvent(event) {
+  const player = view.players.find((p) => p.id === event.playerId);
+  const name = (event.playerName ?? '').toUpperCase();
+
   if (event.type === 'bust') {
-    replay($('#stage'), 'shake');
-    return flash('BUST', event.playerName ?? '', 'bad');
+    shake();
+    return announce({
+      big: 'BUST',
+      sub: (event.text ?? 'Dépassé').toUpperCase(),
+      foot: `${name} · SCORE RENDU ${player ? player.score : ''}`.trim(),
+      tone: 'bad',
+      hold: 2000,
+    });
   }
+
   if (event.type === 'checkout') {
-    const player = view.players.find((p) => p.id === event.playerId);
     const rank = player?.rank ?? view.ranking.length;
-    return flash('CHECKOUT !', `${event.playerName} termine en ${rank}${rank === 1 ? 're' : 'e'} position`, 'win');
+    const darts = view.history[0]?.labels.length ?? 3;
+    return announce({
+      big: 'CHECKOUT',
+      sub: rank === 1 ? 'MANCHE GAGNÉE' : `${rank}ᵉ PLACE`,
+      foot: `${name} · ${event.value} EN ${darts} FLÉCHETTE${darts > 1 ? 'S' : ''}`,
+      tone: 'win',
+      hold: 2800,
+      rays: 18,
+    });
   }
+
   if (event.type === 'bigscore' && event.value >= 100) {
-    return flash(String(event.value), event.value === 180 ? 'Maximum !' : event.playerName ?? '', 'good');
+    return announce({
+      big: String(event.value),
+      sub: event.value === 180 ? 'MAXIMUM' : 'BELLE VOLÉE',
+      foot: event.value === 180 ? `${name} · TON 80` : name,
+      tone: 'good',
+      hold: 2300,
+      rays: event.value === 180 ? 16 : 0,
+    });
   }
+
   return false;
 }
 
-let flashTimer;
-function flash(big, small, tone) {
+let announceTimers = [];
+function announce({ big, sub, foot, tone, hold, rays = 0 }) {
   const node = $('#flash');
+  announceTimers.forEach(clearTimeout);
+  announceTimers = [];
+
   $('#flashBig').textContent = big;
-  $('#flashSmall').textContent = small;
+  $('#flashSub').textContent = sub;
+  $('#flashFoot').textContent = foot;
+
+  const raysBox = $('#flashRays');
+  raysBox.replaceChildren();
+  if (rays && !reduceMotion) {
+    for (let i = 0; i < rays; i++) {
+      const ray = el('div', 'ray');
+      ray.style.setProperty('--deg', `${(360 / rays) * i}deg`);
+      raysBox.append(ray);
+    }
+  }
+
   node.className = `flash ${tone}`;
-  void node.offsetWidth; // relance l'animation
+  void node.offsetWidth; // relance les animations d'entrée
   node.classList.add('show');
-  clearTimeout(flashTimer);
-  flashTimer = setTimeout(() => node.classList.remove('show'), 2300);
+
+  announceTimers.push(setTimeout(() => node.classList.add('out'), hold - 400));
+  announceTimers.push(setTimeout(() => {
+    node.className = 'flash';
+    raysBox.replaceChildren();
+  }, hold));
   return true;
 }
