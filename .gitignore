@@ -13,3 +13,6 @@ dist/
 data/
 *.log
 .DS_Store
+
+# Éléments de présentation (médias volumineux, hors dépôt)
+promo/
