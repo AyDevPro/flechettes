@@ -354,8 +354,9 @@ function render(next) {
 
   // Verrouillage du pavé
   $('#keypad').classList.toggle('locked', !playing || !myTurn);
-  const wait = !playing
-    ? 'Partie en pause'
+  const paused = view.status === 'paused';
+  const wait = paused
+    ? 'Partie en pause — « Reprendre » juste en dessous'
     : !myTurn
       ? `Tour de ${current.name} — en attente…`
       : choice !== SHARED
@@ -363,9 +364,12 @@ function render(next) {
         : '';
   $('#waitline').hidden = !wait;
   $('#waitline').textContent = wait;
+  $('#waitline').classList.toggle('paused', paused);
 
   $('#undoBtn').disabled = !view.canUndo;
-  $('#pauseBtn').textContent = view.status === 'paused' ? 'Reprendre' : 'Pause';
+  $('#skipBtn').disabled = paused;             // rien à passer tant que c'est en pause
+  $('#pauseBtn').textContent = paused ? '▶ Reprendre' : 'Pause';
+  $('#pauseBtn').classList.toggle('primary', paused);
 
   renderStandings($('#standings'), false);
   renderCricketTable(cricket);

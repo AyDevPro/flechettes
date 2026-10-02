@@ -322,9 +322,27 @@ a { color: var(--green); }
 .tools { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 6px; }
 .tools .btn { padding: 11px 6px; font-size: .84rem; }
 
-.keypad.locked { opacity: .35; pointer-events: none; filter: grayscale(.5); }
+/* Le verrou ne porte que sur la saisie : les commandes de partie (annuler,
+   passer, pause) doivent rester accessibles — sans quoi une partie mise en
+   pause ne pourrait plus être reprise. */
+.keypad.locked > .quick,
+.keypad.locked > .mults,
+.keypad.locked > .numbers,
+.keypad.locked > .specials {
+  opacity: .35;
+  pointer-events: none;
+  filter: grayscale(.5);
+}
 
 .waitline { text-align: center; color: var(--gold); font-weight: 700; padding: 6px; }
+
+/* Partie en pause : on dit clairement par où en sortir. */
+.waitline.paused {
+  background: rgba(242, 181, 68, .1);
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
 
 .toast {
   position: fixed;
