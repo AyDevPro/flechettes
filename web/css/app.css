@@ -27,6 +27,10 @@
 
 * { box-sizing: border-box; }
 
+/* `hidden` doit l'emporter sur nos règles d'affichage (display: grid, flex…). */
+[hidden] { display: none !important; }
+
+
 html, body {
   margin: 0;
   padding: 0;
@@ -369,3 +373,61 @@ a { color: var(--green); }
   .scoreboard .score { font-size: 3.8rem; }
   .numbers button, .specials button { padding: 13px 0; font-size: 1.05rem; }
 }
+
+/* ── Cricket ─────────────────────────────────────────────────────────────── */
+
+/* Bandeau des marques du joueur actif, sous son score. */
+.marks-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 10px; }
+
+.marks-strip .mk {
+  background: rgba(0, 0, 0, .22);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 5px 2px 4px;
+  display: grid;
+  gap: 1px;
+  text-align: center;
+}
+
+.marks-strip .mk b { font-size: .66rem; color: var(--muted); font-weight: 700; letter-spacing: .04em; }
+.marks-strip .mk i { font-style: normal; font-size: 1.05rem; font-weight: 800; line-height: 1.1; }
+.marks-strip .mk.closed { border-color: var(--green-dark); background: #16271d; }
+.marks-strip .mk.closed i { color: var(--green); }
+.marks-strip .mk.dead { opacity: .4; }
+
+/* Tableau complet des marques. */
+.cricket-wrap { overflow-x: auto; }
+
+table.cricket {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+table.cricket th, table.cricket td {
+  padding: 7px 6px;
+  text-align: center;
+  border-bottom: 1px solid var(--line);
+}
+
+table.cricket tr:last-child th, table.cricket tr:last-child td { border-bottom: 0; }
+
+table.cricket th.sector {
+  text-align: left;
+  color: var(--muted);
+  font-size: .8rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  width: 3.4em;
+}
+
+table.cricket thead th, table.cricket tr:first-child th { vertical-align: bottom; }
+table.cricket tr:first-child th .n { display: block; font-size: .8rem; font-weight: 700; }
+table.cricket tr:first-child th .p { display: block; font-size: 1.05rem; font-weight: 800; color: var(--gold); }
+table.cricket tr:first-child th.active .n { color: var(--gold); }
+
+table.cricket td { font-size: 1.15rem; font-weight: 800; color: var(--muted); }
+table.cricket td.closed { color: var(--green); }
+table.cricket td.active { background: rgba(242, 181, 68, .07); }
+table.cricket tr.dead { opacity: .45; }
+table.cricket tr.dead td.closed { color: var(--muted); }

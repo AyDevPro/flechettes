@@ -161,11 +161,19 @@ test('le mode Débutant évite les triples quand un chemin simple existe', () =>
   assert.equal(hundred.kind, 'checkout');
 });
 
-test('une seule fléchette : seule une sortie directe est proposée', () => {
+test('une seule fléchette : sortie directe, ou rien du tout', () => {
   assert.equal(reco(40, 1, 'double', 'standard').text, 'D20');
   assert.equal(reco(50, 1, 'double', 'standard').text, 'BULL');
-  assert.equal(reco(60, 1, 'double', 'standard').kind, 'setup', '60 ne se sort pas en une fléchette au double');
   assert.equal(reco(60, 1, 'triple', 'standard').text, 'T20');
+
+  // Plus de sortie possible avec la dernière fléchette : on n'affiche rien,
+  // le joueur voit que la manche ne se terminera pas ce tour-ci.
+  for (const remaining of [60, 85, 112, 170]) {
+    assert.equal(reco(remaining, 1, 'double', 'standard').kind, 'none', `${remaining} en une fléchette`);
+  }
+  // Avec deux fléchettes, la préparation reste utile.
+  assert.equal(reco(85, 2, 'double', 'standard').kind, 'checkout');
+  assert.equal(reco(130, 2, 'double', 'standard').kind, 'setup');
 });
 
 test('score trop élevé : aucun conseil au-dessus de 180', () => {
@@ -184,7 +192,7 @@ test('à partir de 180, le moteur prépare le tour suivant', () => {
 
   // Une préparation ne doit jamais conduire à un Bust ni à un reste injouable.
   for (const remaining of [180, 171, 169, 100, 62]) {
-    for (const darts of [3, 2, 1]) {
+    for (const darts of [3, 2]) {
       const plan = reco(remaining, darts, 'double', 'standard');
       if (plan.kind !== 'setup') continue;
       const rest = remaining - plan.codes.map(t).reduce((s, x) => s + x.value, 0);
@@ -195,13 +203,14 @@ test('à partir de 180, le moteur prépare le tour suivant', () => {
 });
 
 test('le mode Débutant vise des cibles plus simples pour préparer', () => {
-  // Avec une seule fléchette sur 62, un débutant vise un grand simple ; les
-  // autres niveaux acceptent un triple pour laisser un meilleur reste.
-  const beginner = reco(62, 1, 'double', 'beginner');
-  const standard = reco(62, 1, 'double', 'standard');
+  // Sur 130 en deux fléchettes, un débutant enchaîne un triple puis un grand
+  // simple ; les autres niveaux acceptent deux triples pour un meilleur reste.
+  const beginner = reco(130, 2, 'double', 'beginner');
+  const standard = reco(130, 2, 'double', 'standard');
+  const triples = (r) => r.labels.filter((l) => l.startsWith('T')).length;
   assert.equal(beginner.kind, 'setup');
-  assert.ok(beginner.labels.every((l) => !l.startsWith('T')), `route trop technique : ${beginner.text}`);
-  assert.ok(standard.labels.some((l) => l.startsWith('T')), `route trop timide : ${standard.text}`);
+  assert.equal(standard.kind, 'setup');
+  assert.ok(triples(beginner) < triples(standard), `${beginner.text} vs ${standard.text}`);
 });
 
 test('un reste sans option est jugé fragile', () => {

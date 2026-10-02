@@ -28,13 +28,14 @@
   <form id="setup" hidden>
     <section class="card">
       <h2>Type de partie</h2>
-      <div class="seg" id="startScore">
+      <div class="seg" id="gameType">
         <button type="button" value="301"><strong>301</strong><span>Partie courte</span></button>
         <button type="button" value="501"><strong>501</strong><span>Format classique</span></button>
+        <button type="button" value="cricket"><strong>Cricket</strong><span>Fermer 20 à 15 et le bull</span></button>
       </div>
     </section>
 
-    <section class="card">
+    <section class="card" data-x01>
       <h2>Entrée</h2>
       <div class="seg" id="inRule">
         <button type="button" value="straight"><strong>Straight In</strong><span>On marque dès la première fléchette</span></button>
@@ -42,7 +43,7 @@
       </div>
     </section>
 
-    <section class="card">
+    <section class="card" data-x01>
       <h2>Sortie</h2>
       <div class="seg" id="outRule">
         <button type="button" value="straight"><strong>Straight Out</strong><span>N'importe quelle fléchette</span></button>
@@ -92,6 +93,7 @@
       <div class="who"><span class="badge" id="turnBadge">Au tour de</span><span id="playerNameLive">—</span></div>
       <div class="score" id="score">—</div>
       <div class="meta" id="meta"></div>
+      <div class="marks-strip" id="marksStrip" hidden></div>
       <div class="darts" id="darts"></div>
       <div class="reco" id="reco" hidden>
         <div class="label" id="recoLabel">Checkout conseillé</div>
@@ -125,6 +127,7 @@
     <section class="card" style="margin:0">
       <h2 id="scoresTitle">Scores</h2>
       <ul class="standings" id="standings"></ul>
+      <div class="cricket-wrap" id="cricketWrap" hidden><table class="cricket" id="cricketTable"></table></div>
     </section>
   </main>
 

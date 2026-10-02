@@ -17,8 +17,10 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { store } from './store.ts';
 import { hub, type Client } from './hub.ts';
 import { IN_RULES, OUT_RULES, type InRule, type OutRule } from './engine/rules.ts';
+import type { GameMode } from './types.ts';
 import { LEVELS, type Level } from './engine/checkout.ts';
 import { MISS, TARGETS } from './engine/board.ts';
+import { CRICKET_TARGETS } from './engine/cricket.ts';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -55,6 +57,8 @@ app.get('/api/health', health);
 /** Options proposées à l'écran de création. */
 app.get('/api/options', (_req, res) => {
   res.json({
+    modes: ['x01', 'cricket'],
+    cricketTargets: CRICKET_TARGETS,
     startScores: START_SCORES,
     inRules: IN_RULES,
     outRules: OUT_RULES,
@@ -72,17 +76,23 @@ app.get('/api/game', (_req, res) => {
 /** Crée la partie. Refuse d'écraser une partie en cours sans `replace: true`. */
 app.post('/api/game', (req, res) => {
   const body = req.body ?? {};
-  const startScore = Number(body.startScore);
-  const inRule = String(body.inRule) as InRule;
-  const outRule = String(body.outRule) as OutRule;
+  const mode: GameMode = body.mode === 'cricket' ? 'cricket' : 'x01';
   const level = String(body.level) as Level;
   const players: string[] = Array.isArray(body.players)
     ? body.players.map((n: unknown) => String(n ?? '').trim().slice(0, 20)).filter(Boolean)
     : [];
 
-  if (!START_SCORES.includes(startScore)) return res.status(400).json({ error: 'Score de départ invalide' });
-  if (!IN_RULES.includes(inRule)) return res.status(400).json({ error: 'Règle d\'entrée invalide' });
-  if (!OUT_RULES.includes(outRule)) return res.status(400).json({ error: 'Règle de sortie invalide' });
+  // Au cricket, le score de départ et les règles d'entrée/sortie ne s'appliquent
+  // pas : on garde des valeurs neutres dans l'état de la partie.
+  const startScore = mode === 'cricket' ? 501 : Number(body.startScore);
+  const inRule = (mode === 'cricket' ? 'straight' : String(body.inRule)) as InRule;
+  const outRule = (mode === 'cricket' ? 'double' : String(body.outRule)) as OutRule;
+
+  if (mode === 'x01') {
+    if (!START_SCORES.includes(startScore)) return res.status(400).json({ error: 'Score de départ invalide' });
+    if (!IN_RULES.includes(inRule)) return res.status(400).json({ error: 'Règle d\'entrée invalide' });
+    if (!OUT_RULES.includes(outRule)) return res.status(400).json({ error: 'Règle de sortie invalide' });
+  }
   if (!LEVELS.includes(level)) return res.status(400).json({ error: 'Niveau de recommandation invalide' });
   if (players.length < 1) return res.status(400).json({ error: 'Ajoutez au moins un joueur' });
   if (players.length > 12) return res.status(400).json({ error: 'Douze joueurs maximum' });
@@ -92,7 +102,7 @@ app.post('/api/game', (req, res) => {
     return res.status(409).json({ error: 'Une partie est déjà en cours', view: running.view() });
   }
 
-  const game = store.create({ startScore, inRule, outRule, level, players, shuffle: !!body.shuffle });
+  const game = store.create({ mode, startScore, inRule, outRule, level, players, shuffle: !!body.shuffle });
   broadcastState();
   res.status(201).json({ view: game.view() });
 });

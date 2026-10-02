@@ -346,7 +346,7 @@ function planSetup(remaining: number, darts: number, out: OutRule, level: Level)
 
 // ── API publique ─────────────────────────────────────────────────────────────
 
-export type RecommendationKind = 'entry' | 'checkout' | 'setup' | 'none';
+export type RecommendationKind = 'entry' | 'checkout' | 'setup' | 'aim' | 'none';
 
 export interface Recommendation {
   kind: RecommendationKind;
@@ -431,6 +431,11 @@ export function recommend(opts: {
 
   // Trop haut pour qu'un conseil ait du sens : on n'affiche rien.
   if (remaining > ADVICE_FROM) return NONE;
+
+  // Dernière fléchette du tour sans sortie possible : on efface le conseil.
+  // Le joueur voit tout de suite que la manche ne se termine pas ici — plutôt
+  // que de lire une route qui ressemble encore à un checkout.
+  if (dartsLeft <= 1) return NONE;
 
   // Pas de sortie possible ce tour-ci : on prépare le tour suivant.
   const plan = planSetup(remaining, dartsLeft, outRule, level);

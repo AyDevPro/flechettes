@@ -49,17 +49,22 @@ function render(next) {
 
   if (!view) return renderIdle();
 
-  $('#title').textContent = `Partie en ${view.startScore}`;
+  const cricket = view.mode === 'cricket';
+  $('#title').textContent = cricket ? 'Cricket' : `Partie en ${view.startScore}`;
   $('#rules').replaceChildren(
-    el('span', 'tag', RULE_LABELS.in[view.inRule]),
-    el('span', 'tag', RULE_LABELS.out[view.outRule]),
+    ...(cricket
+      ? [el('span', 'tag', '20 · 19 · 18 · 17 · 16 · 15 · Bull')]
+      : [el('span', 'tag', RULE_LABELS.in[view.inRule]), el('span', 'tag', RULE_LABELS.out[view.outRule])]),
     el('span', 'tag', `Conseils ${RULE_LABELS.level[view.level]}`),
   );
+  $('#roster').hidden = cricket;
+  $('#cricketBoard').hidden = !cricket;
 
   if (view.status === 'finished') renderFinal();
   else renderStage(first);
 
-  renderRoster(first);
+  if (view.mode === 'cricket') renderCricketBoard();
+  else renderRoster(first);
   renderFoot(!first && view.history[0] && view.history[0].turnNo !== previous.historyTurn);
   renderStatus();
 
@@ -111,7 +116,11 @@ function renderStage(first) {
 
   $('#turnLabel').textContent = view.status === 'paused' ? 'Partie en pause' : 'Au tour de';
   $('#who').textContent = current.name ?? '—';
-  $('#sub').textContent = `${current.dartsLeft} fléchette${current.dartsLeft > 1 ? 's' : ''} restante${current.dartsLeft > 1 ? 's' : ''} · tour à ${current.turnTotal}`;
+  // Au cricket le grand nombre est un total de points : on l'annonce.
+  const left = `${current.dartsLeft} fléchette${current.dartsLeft > 1 ? 's' : ''} restante${current.dartsLeft > 1 ? 's' : ''}`;
+  $('#sub').textContent = view.mode === 'cricket'
+    ? `points · ${left} · tour à ${current.turnTotal}`
+    : `${left} · tour à ${current.turnTotal}`;
 
   // Le score défile jusqu'à sa nouvelle valeur — seulement s'il s'agit du même
   // joueur, sinon on décompterait entre deux joueurs sans rapport.
@@ -143,7 +152,8 @@ function renderStage(first) {
   if (show) {
     $('#recoCap').textContent = reco.kind === 'entry' ? 'Entrée'
       : reco.kind === 'setup' ? `À viser · ${reco.note ?? ''}`
-        : 'Checkout conseillé';
+        : reco.kind === 'aim' ? `À viser · ${reco.note ?? ''}`
+          : 'Checkout conseillé';
     $('#recoRoute').textContent = reco.text;
   }
 }
@@ -175,7 +185,8 @@ function renderFinal() {
     const li = el('li');
     li.style.animationDelay = `${i * 90}ms`;
     li.append(el('span', 'm', player.rank ? `${player.rank}.` : '—'), document.createTextNode(player.name));
-    if (player.stats.checkout) li.append(el('span', 'm', ` (checkout ${player.stats.checkout})`));
+    if (view.mode === 'cricket') li.append(el('span', 'm', ` (${player.score} points)`));
+    else if (player.stats.checkout) li.append(el('span', 'm', ` (checkout ${player.stats.checkout})`));
     list.append(li);
   });
   box.append(list);
@@ -257,10 +268,83 @@ function layoutRoster() {
   roster.style.setProperty('--pl-top', `${Math.max(0, (height - total) / 2)}px`);
 }
 
+const MARK_GLYPHS = ['', '/', '✕', '⊗'];
+const SECTOR_LABELS = { 25: 'BULL' };
+let cricketCells = new Map();
+
+/** Tableau de cricket : une colonne par joueur, une ligne par secteur. */
+function renderCricketBoard() {
+  const board = $('#cricketBoard');
+  const players = view.players.filter((p) => !p.removed);
+  const targets = view.cricket?.targets ?? [];
+  const dead = view.cricket?.dead ?? [];
+  const signature = `${players.map((p) => p.id).join()}|${targets.join()}`;
+
+  if (board.dataset.signature !== signature) {
+    board.dataset.signature = signature;
+    board.style.setProperty('--columns', String(players.length));
+    board.replaceChildren();
+    cricketCells = new Map();
+
+    board.append(el('div', 'ch corner'));
+    for (const player of players) {
+      const head = el('div', 'ch');
+      head.dataset.player = player.id;
+      head.append(el('div', 'name', player.name), el('div', 'points'));
+      board.append(head);
+    }
+    for (const sector of targets) {
+      const label = el('div', 'rh', SECTOR_LABELS[sector] ?? String(sector));
+      label.dataset.sector = String(sector);
+      board.append(label);
+      for (const player of players) {
+        const cell = el('div', 'cell');
+        board.append(cell);
+        cricketCells.set(`${player.id}|${sector}`, cell);
+      }
+    }
+  }
+
+  for (const player of players) {
+    const head = board.querySelector(`.ch[data-player="${player.id}"]`);
+    if (!head) continue;
+    head.classList.toggle('active', player.id === view.currentPlayerId && view.status !== 'finished');
+    head.classList.toggle('done', player.finished);
+    const points = head.querySelector('.points');
+    const label = player.rank ? `${player.rank}${player.rank === 1 ? 're' : 'e'} · ${player.score}` : String(player.score);
+    if (points.textContent !== label) {
+      points.textContent = label;
+      replay(points, 'pop');
+    }
+  }
+
+  for (const sector of targets) {
+    const label = board.querySelector(`.rh[data-sector="${sector}"]`);
+    label?.classList.toggle('dead', dead.includes(sector));
+    for (const player of players) {
+      const cell = cricketCells.get(`${player.id}|${sector}`);
+      if (!cell) continue;
+      const marks = player.marks?.[sector] ?? 0;
+      const glyph = MARK_GLYPHS[Math.min(marks, 3)] ?? '';
+      if (cell.textContent !== glyph) {
+        cell.textContent = glyph;
+        replay(cell, 'mark-in');
+      }
+      cell.classList.toggle('closed', marks >= 3);
+      cell.classList.toggle('dead', dead.includes(sector));
+      cell.classList.toggle('active', player.id === view.currentPlayerId && view.status !== 'finished');
+    }
+  }
+}
+
 function renderStatus() {
   const player = view.players.find((p) => p.id === view.current.playerId);
   const stats = player?.stats;
   const average = stats && stats.darts > 0 ? ((stats.points / stats.darts) * 3).toFixed(1) : null;
+  if (view.mode === 'cricket') {
+    $('#status').textContent = `Tour ${view.turnNo} · fermer trois fois chaque secteur`;
+    return;
+  }
   $('#status').textContent = view.status === 'finished'
     ? `${view.players.length} joueurs · ${view.turnNo} tours`
     : `Tour ${view.turnNo}${average ? ` · moyenne ${average}` : ''}`;
@@ -275,7 +359,10 @@ function renderFoot(fresh) {
     if (turn.busted) item.classList.add('bust');
     if (turn.finished) item.classList.add('win');
     item.append(el('b', '', turn.playerName), document.createTextNode(turn.labels.join(' · ') || 'tour passé'));
-    item.append(el('span', 't', turn.busted ? 'BUST' : turn.finished ? '✓' : String(turn.total)));
+    const score = view.mode === 'cricket'
+      ? `${turn.marks ?? 0} ✕${turn.total ? ` · ${turn.total}` : ''}`
+      : String(turn.total);
+    item.append(el('span', 't', turn.busted ? 'BUST' : turn.finished ? '✓' : score));
     foot.append(item);
   });
 }
@@ -374,14 +461,29 @@ function playEvent(event) {
 
   if (event.type === 'checkout') {
     const rank = player?.rank ?? view.ranking.length;
+    const cricket = view.mode === 'cricket';
     const darts = view.history[0]?.labels.length ?? 3;
     return announce({
-      big: 'CHECKOUT',
-      sub: rank === 1 ? 'MANCHE GAGNÉE' : `${rank}ᵉ PLACE`,
-      foot: `${name} · ${event.value} EN ${darts} FLÉCHETTE${darts > 1 ? 'S' : ''}`,
+      big: cricket ? 'GAGNÉ' : 'CHECKOUT',
+      sub: cricket && rank === 1 ? 'TOUT FERMÉ' : rank === 1 ? 'MANCHE GAGNÉE' : `${rank}ᵉ PLACE`,
+      foot: cricket
+        ? `${name} · ${event.value} POINT${event.value > 1 ? 'S' : ''}`
+        : `${name} · ${event.value} EN ${darts} FLÉCHETTE${darts > 1 ? 'S' : ''}`,
       tone: 'win',
       hold: 2800,
       rays: 18,
+    });
+  }
+
+  // Cricket : le beau tour se compte en marques (neuf = parfait).
+  if (event.type === 'bigscore' && event.text === 'marques') {
+    return announce({
+      big: `${event.value} MARQUES`,
+      sub: event.value >= 9 ? 'TOUR PARFAIT' : 'BELLE VOLÉE',
+      foot: name,
+      tone: 'good',
+      hold: 2300,
+      rays: event.value >= 9 ? 16 : 0,
     });
   }
 

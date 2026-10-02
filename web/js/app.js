@@ -8,7 +8,8 @@ import { $, $$, RULE_LABELS, api, buzz, connect, el, registerSW, store, toast } 
 registerSW();
 
 const SHARED = 'shared';
-const config = { startScore: 501, inRule: 'straight', outRule: 'double', level: 'standard' };
+const config = { mode: 'x01', startScore: 501, inRule: 'straight', outRule: 'double', level: 'standard' };
+const CRICKET_LABELS = { 25: 'Bull' };
 const draft = [];                       // joueurs saisis avant le lancement
 
 let view = null;                        // état de la partie, ou null
@@ -41,7 +42,29 @@ function segment(id, key) {
   paint();
 }
 
-segment('startScore', 'startScore');
+/** Le type de partie choisit à la fois le mode et le score de départ. */
+function gameTypeSegment() {
+  const group = $('#gameType');
+  const paint = () => {
+    const current = config.mode === 'cricket' ? 'cricket' : String(config.startScore);
+    $$('button', group).forEach((b) => b.setAttribute('aria-pressed', String(b.value === current)));
+    // Les règles d'entrée et de sortie n'existent pas au cricket.
+    for (const card of $$('#setup [data-x01]')) card.hidden = config.mode === 'cricket';
+  };
+  group.addEventListener('click', (event) => {
+    const button = event.target.closest('button');
+    if (!button) return;
+    if (button.value === 'cricket') config.mode = 'cricket';
+    else {
+      config.mode = 'x01';
+      config.startScore = Number(button.value);
+    }
+    paint();
+  });
+  paint();
+}
+
+gameTypeSegment();
 segment('inRule', 'inRule');
 segment('outRule', 'outRule');
 segment('level', 'level');
@@ -259,8 +282,11 @@ function render(next) {
 
   // La barre du haut reste courte (elle partage la ligne avec deux boutons) :
   // le détail des règles est rappelé au-dessus des scores.
-  $('#rules').textContent = String(view.startScore);
-  $('#scoresTitle').textContent = `Scores · ${RULE_LABELS.in[view.inRule]} · ${RULE_LABELS.out[view.outRule]} · Conseils ${RULE_LABELS.level[view.level]}`;
+  const cricket = view.mode === 'cricket';
+  $('#rules').textContent = cricket ? 'Cricket' : String(view.startScore);
+  $('#scoresTitle').textContent = cricket
+    ? `Cricket · Conseils ${RULE_LABELS.level[view.level]}`
+    : `Scores · ${RULE_LABELS.in[view.inRule]} · ${RULE_LABELS.out[view.outRule]} · Conseils ${RULE_LABELS.level[view.level]}`;
   $('#quitBtn').hidden = false;
   $('#quitBtn').textContent = view.status === 'finished' ? 'Nouvelle' : 'Terminer';
 
@@ -291,7 +317,10 @@ function render(next) {
   $('#playerNameLive').textContent = current.name ?? '—';
   $('#score').textContent = current.score;
   $('#turnBadge').textContent = myTurn && choice !== SHARED ? 'À toi de jouer' : 'Au tour de';
-  $('#meta').textContent = `${current.dartsLeft} fléchette${current.dartsLeft > 1 ? 's' : ''} · tour à ${current.turnTotal}`;
+  $('#meta').textContent = cricket
+    ? `points · ${current.dartsLeft} fléchette${current.dartsLeft > 1 ? 's' : ''} · tour à ${current.turnTotal}`
+    : `${current.dartsLeft} fléchette${current.dartsLeft > 1 ? 's' : ''} · tour à ${current.turnTotal}`;
+  renderMarksStrip(cricket, current.playerId);
   $('#scoreboard').classList.toggle('waiting', !myTurn);
 
   // Fléchettes du tour
@@ -312,7 +341,8 @@ function render(next) {
   if (showReco) {
     $('#recoLabel').textContent = reco.kind === 'entry' ? 'Entrée'
       : reco.kind === 'setup' ? 'À viser pour préparer la sortie'
-        : 'Checkout conseillé';
+        : reco.kind === 'aim' ? 'À viser'
+          : 'Checkout conseillé';
     $('#recoRoute').textContent = reco.text;
     $('#recoNote').textContent = reco.note ?? '';
   }
@@ -333,6 +363,63 @@ function render(next) {
   $('#pauseBtn').textContent = view.status === 'paused' ? 'Reprendre' : 'Pause';
 
   renderStandings($('#standings'), false);
+  renderCricketTable(cricket);
+}
+
+/** Bandeau des marques du joueur actif, sous son score. */
+function renderMarksStrip(cricket, playerId) {
+  const strip = $('#marksStrip');
+  strip.hidden = !cricket;
+  if (!cricket) return;
+  const player = view.players.find((p) => p.id === playerId);
+  const dead = view.cricket?.dead ?? [];
+  strip.replaceChildren();
+  for (const sector of view.cricket?.targets ?? []) {
+    const marks = player?.marks?.[sector] ?? 0;
+    const chip = el('span', 'mk');
+    if (marks >= 3) chip.classList.add('closed');
+    if (dead.includes(sector)) chip.classList.add('dead');
+    chip.append(el('b', '', CRICKET_LABELS[sector] ?? String(sector)), el('i', '', MARK_GLYPHS[marks] ?? '·'));
+    strip.append(chip);
+  }
+}
+
+const MARK_GLYPHS = ['·', '/', '✕', '⊗'];
+
+/** Tableau complet des marques, à la place de la liste des scores. */
+function renderCricketTable(cricket) {
+  const wrap = $('#cricketWrap');
+  wrap.hidden = !cricket;
+  $('#standings').hidden = cricket;
+  if (!cricket) return;
+
+  const players = view.players.filter((p) => !p.removed);
+  const dead = view.cricket?.dead ?? [];
+  const table = $('#cricketTable');
+  table.replaceChildren();
+
+  const head = el('tr');
+  head.append(el('th', '', ''));
+  for (const player of players) {
+    const th = el('th');
+    if (player.id === view.currentPlayerId) th.classList.add('active');
+    th.append(el('span', 'n', player.name), el('span', 'p', `${player.score}`));
+    head.append(th);
+  }
+  table.append(head);
+
+  for (const sector of view.cricket?.targets ?? []) {
+    const row = el('tr');
+    if (dead.includes(sector)) row.classList.add('dead');
+    row.append(el('th', 'sector', CRICKET_LABELS[sector] ?? String(sector)));
+    for (const player of players) {
+      const marks = player.marks?.[sector] ?? 0;
+      const td = el('td', marks >= 3 ? 'closed' : '', MARK_GLYPHS[marks] ?? '·');
+      if (player.id === view.currentPlayerId) td.classList.add('active');
+      row.append(td);
+    }
+    table.append(row);
+  }
 }
 
 function renderStandings(list, final) {
@@ -349,7 +436,7 @@ function renderStandings(list, final) {
     li.append(el('span', 'n', player.name));
     if (player.rank) li.append(el('span', 'rk', `${player.rank}${player.rank === 1 ? 're' : 'e'}`));
     else if (view.hints?.[player.id]) li.append(el('span', 'rk', view.hints[player.id]));
-    li.append(el('span', 's', player.finished ? '✓' : String(player.score)));
+    li.append(el('span', 's', player.finished && view.mode !== 'cricket' ? '✓' : String(player.score)));
 
     const others = view.players.filter((p) => !p.removed).length;
     if (!final && !player.removed && !player.finished && others > 1) {

@@ -2,16 +2,22 @@
 
 import type { InRule, OutRule, ThrowKind } from './engine/rules.ts';
 import type { Level, Recommendation } from './engine/checkout.ts';
+import type { Marks } from './engine/cricket.ts';
 
-export type { InRule, OutRule, Level, Recommendation, ThrowKind };
+export type { InRule, OutRule, Level, Recommendation, ThrowKind, Marks };
 
 export type GameStatus = 'playing' | 'paused' | 'finished';
+
+/** Mode de jeu : x01 (301/501) ou cricket. */
+export type GameMode = 'x01' | 'cricket';
 
 export interface Player {
   id: string;
   name: string;
-  /** Points restants. */
+  /** x01 : points restants. Cricket : points marqués. */
   score: number;
+  /** Cricket : marques posées par secteur (0 à 3). */
+  marks: Marks;
   /** Entré dans la partie (toujours vrai en Straight In). */
   entered: boolean;
   finished: boolean;
@@ -44,6 +50,9 @@ export interface DartRecord {
   /** Score du joueur après la fléchette (score de début de tour si Bust). */
   scoreAfter: number;
   reason?: string;
+  /** Cricket : marques posées et points rapportés par cette fléchette. */
+  marks?: number;
+  points?: number;
 }
 
 export interface Turn {
@@ -61,6 +70,8 @@ export interface TurnSummary {
   playerName: string;
   labels: string[];
   total: number;
+  /** Cricket : marques posées pendant le tour. */
+  marks?: number;
   busted: boolean;
   finished: boolean;
 }
@@ -90,6 +101,7 @@ export interface DartLogEntry {
 }
 
 export interface GameState {
+  mode: GameMode;
   createdAt: string;
   updatedAt: string;
   startScore: number;
@@ -127,4 +139,6 @@ export interface GameView extends GameState {
   canUndo: boolean;
   /** Checkout conseillé pour chaque joueur (affichage TV), `null` si hors de portée. */
   hints: Record<string, string | null>;
+  /** Cricket : secteurs en jeu et secteurs morts (fermés par tout le monde). */
+  cricket?: { targets: number[]; dead: number[] };
 }

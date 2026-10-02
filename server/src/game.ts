@@ -10,8 +10,11 @@ import { randomBytes } from 'node:crypto';
 import { targetByCode, type Target } from './engine/board.ts';
 import { BUST_LABELS, resolveDart } from './engine/rules.ts';
 import { isCheckable, recommend } from './engine/checkout.ts';
+import {
+  CRICKET_TARGETS, closedCount, emptyMarks, hasWon, isDead, recommendCricket, resolveCricketDart,
+} from './engine/cricket.ts';
 import type {
-  DartLogEntry, DartRecord, GameEvent, GameState, GameView, InRule, Level, OutRule, Player, Turn, TurnSummary,
+  DartLogEntry, DartRecord, GameEvent, GameMode, GameState, GameView, InRule, Level, OutRule, Player, Turn, TurnSummary,
 } from './types.ts';
 
 const MAX_UNDO = 300;
@@ -24,6 +27,8 @@ export function makeId(size = 5): string {
 }
 
 export interface CreateOptions {
+  /** `x01` par défaut (301/501), ou `cricket`. */
+  mode?: GameMode;
   startScore: number;
   inRule: InRule;
   outRule: OutRule;
@@ -45,6 +50,7 @@ function newPlayer(name: string, score: number, entered: boolean): Player {
     id: makeId(),
     name,
     score,
+    marks: emptyMarks(),
     entered,
     finished: false,
     rank: null,
@@ -66,9 +72,11 @@ export class Game {
   }
 
   static create(opts: CreateOptions): Game {
+    const mode: GameMode = opts.mode ?? 'x01';
     const names = opts.players.map((n) => n.trim()).filter(Boolean);
-    const entered = opts.inRule === 'straight';
-    const players = names.map((n) => newPlayer(n, opts.startScore, entered));
+    // Au cricket, on part de zéro point et personne n'a de condition d'entrée.
+    const entered = mode === 'cricket' || opts.inRule === 'straight';
+    const players = names.map((n) => newPlayer(n, mode === 'cricket' ? 0 : opts.startScore, entered));
     const order = players.map((p) => p.id);
     if (opts.shuffle) {
       for (let i = order.length - 1; i > 0; i--) {
@@ -80,6 +88,7 @@ export class Game {
     }
     const now = new Date().toISOString();
     const state: GameState = {
+      mode,
       createdAt: now,
       updatedAt: now,
       startScore: opts.startScore,
@@ -143,7 +152,13 @@ export class Game {
 
   private countedTotal(turn: Turn): number {
     if (turn.busted) return 0;
+    if (this.state.mode === 'cricket') return turn.darts.reduce((sum, d) => sum + (d.points ?? 0), 0);
     return turn.darts.reduce((sum, d) => sum + (d.kind === 'score' || d.kind === 'win' ? d.value : 0), 0);
+  }
+
+  /** Cricket : marques posées pendant le tour (neuf = tour parfait). */
+  private turnMarks(turn: Turn): number {
+    return turn.darts.reduce((sum, d) => sum + (d.marks ?? 0), 0);
   }
 
   private endTurn(): void {
@@ -161,20 +176,28 @@ export class Game {
       else if (total >= 100) p.stats.count100 += 1;
     }
 
+    const cricket = this.state.mode === 'cricket';
+    const marks = cricket ? this.turnMarks(turn) : 0;
     const summary: TurnSummary = {
       turnNo: this.state.turnNo,
       playerId: turn.playerId,
       playerName: p?.name ?? '—',
       labels: turn.darts.map((d) => d.label),
       total,
+      ...(cricket ? { marks } : {}),
       busted: turn.busted,
       finished: turn.finished,
     };
     this.state.history.unshift(summary);
     if (this.state.history.length > MAX_HISTORY) this.state.history.pop();
 
-    if (!turn.busted && !turn.finished && total >= 100) {
-      this.pushEvent({ type: 'bigscore', playerId: turn.playerId, playerName: p?.name, value: total });
+    if (!turn.busted && !turn.finished) {
+      // Au cricket, le beau tour se compte en marques (neuf = parfait).
+      if (cricket && marks >= 6) {
+        this.pushEvent({ type: 'bigscore', playerId: turn.playerId, playerName: p?.name, value: marks, text: 'marques' });
+      } else if (!cricket && total >= 100) {
+        this.pushEvent({ type: 'bigscore', playerId: turn.playerId, playerName: p?.name, value: total });
+      }
     }
 
     this.advance(turn.playerId);
@@ -205,7 +228,9 @@ export class Game {
   private finishGame(): void {
     // Les joueurs encore en lice sont classés derrière ceux qui ont terminé,
     // par score restant croissant.
-    const left = this.contenders().sort((a, b) => a.score - b.score);
+    const left = this.contenders().sort((a, b) => (this.state.mode === 'cricket'
+      ? (closedCount(b.marks) - closedCount(a.marks)) || (b.score - a.score)
+      : a.score - b.score));
     for (const p of left) {
       p.rank = this.state.ranking.length + 1;
       this.state.ranking.push(p.id);
@@ -229,6 +254,8 @@ export class Game {
     if (!target) return { ok: false, error: `Cible inconnue : ${code}` };
 
     this.snapshot();
+
+    if (this.state.mode === 'cricket') return this.applyCricketDart(target, turn, p);
 
     const scoreBefore = p.score;
     const dartNo = turn.darts.length + 1;
@@ -312,6 +339,69 @@ export class Game {
     return result;
   }
 
+  /** Enregistre une fléchette au cricket : marques, points, victoire. */
+  private applyCricketDart(target: Target, turn: Turn, p: Player): ApplyResult {
+    const rivals = this.state.players.filter((o) => o.id !== p.id && !o.removed);
+    const scoreBefore = p.score;
+    const dartNo = turn.darts.length + 1;
+
+    const outcome = resolveCricketDart(target, p, rivals);
+    if (outcome.sector !== null && outcome.marksAdded > 0) {
+      p.marks[outcome.sector] = (p.marks[outcome.sector] ?? 0) + outcome.marksAdded;
+    }
+    p.score += outcome.pointsAdded;
+
+    // La victoire se juge face aux joueurs encore en lice.
+    const inPlay = rivals.filter((o) => !o.finished);
+    const won = hasWon(p, inPlay);
+    const kind = won ? 'win' : outcome.marksAdded > 0 || outcome.pointsAdded > 0 ? 'score' : 'no-count';
+
+    const record: DartRecord = {
+      code: target.code,
+      label: target.label,
+      value: target.value,
+      mult: target.mult,
+      sector: target.sector,
+      kind,
+      scoreAfter: p.score,
+      marks: outcome.marksAdded,
+      points: outcome.pointsAdded,
+    };
+    turn.darts.push(record);
+    p.stats.darts += 1;
+
+    if (won) {
+      p.finished = true;
+      p.rank = this.state.ranking.length + 1;
+      this.state.ranking.push(p.id);
+      turn.finished = true;
+      this.pushEvent({ type: 'checkout', playerId: p.id, playerName: p.name, value: p.score });
+    }
+
+    this.state.log.push({
+      turnNo: this.state.turnNo,
+      dartNo,
+      playerId: p.id,
+      playerName: p.name,
+      code: target.code,
+      sector: target.sector,
+      mult: target.mult,
+      value: target.value,
+      kind,
+      scoreBefore,
+      scoreAfter: p.score,
+    });
+    if (this.state.log.length > MAX_LOG) this.state.log.shift();
+
+    const result: ApplyResult = { ok: true, record, turnEnded: false };
+    if (won || turn.darts.length >= 3) {
+      this.endTurn();
+      result.turnEnded = true;
+    }
+    this.touch();
+    return result;
+  }
+
   /** Annule la dernière action (fléchette, tour passé, joueur retiré…). */
   undo(): boolean {
     const previous = this.undoStack.pop();
@@ -374,16 +464,20 @@ export class Game {
     const dartsLeft = turn ? 3 - turn.darts.length : 0;
     const turnTotal = turn ? this.countedTotal(turn) : 0;
     const entered = p ? p.entered : true;
-    const recommendation = p && turn && this.state.status === 'playing'
-      ? recommend({
-          remaining: p.score,
-          dartsLeft,
-          inRule: this.state.inRule,
-          outRule: this.state.outRule,
-          entered,
-          level: this.state.level,
-        })
-      : { kind: 'none' as const, codes: [], labels: [], text: '—', alternatives: [] };
+    const cricket = this.state.mode === 'cricket';
+    const idle = { kind: 'none' as const, codes: [], labels: [], text: '—', alternatives: [] };
+    const recommendation = !p || !turn || this.state.status !== 'playing'
+      ? idle
+      : cricket
+        ? recommendCricket(p, this.state.players.filter((o) => o.id !== p.id && !o.removed && !o.finished), this.state.level)
+        : recommend({
+            remaining: p.score,
+            dartsLeft,
+            inRule: this.state.inRule,
+            outRule: this.state.outRule,
+            entered,
+            level: this.state.level,
+          });
 
     return {
       ...this.state,
@@ -398,11 +492,18 @@ export class Game {
       },
       canUndo: this.undoStack.length > 0,
       hints: Object.fromEntries(this.state.players.map((pl) => [pl.id, this.hintFor(pl)])),
+      ...(cricket ? {
+        cricket: {
+          targets: CRICKET_TARGETS,
+          dead: CRICKET_TARGETS.filter((sector) => isDead(this.state.players.filter((pl) => !pl.removed), sector)),
+        },
+      } : {}),
     };
   }
 
   /** Recommandation propre à un joueur (affichage TV : checkout sous chaque score). */
   hintFor(player: Player): string | null {
+    if (this.state.mode === 'cricket') return null;
     if (player.finished || player.removed || !player.entered) return null;
     if (!isCheckable(player.score, 3, this.state.outRule)) return null;
     const r = recommend({
