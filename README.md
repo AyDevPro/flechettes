@@ -63,11 +63,15 @@ de checkout sont calculés par le serveur et poussés à tous les appareils.
 
 Secteurs en jeu : **20, 19, 18, 17, 16, 15 et le bull**. Trois marques ferment un
 secteur (simple 1, double 2, triple 3 ; anneau du bull 1, bull 50 en vaut 2).
-Une fois un secteur fermé, les marques en trop rapportent sa valeur en points
-tant qu'au moins un adversaire ne l'a pas fermé ; fermé par tout le monde, il est
-**mort** et ne rapporte plus rien. On gagne en ayant fermé les sept secteurs et
-au moins autant de points que chaque adversaire encore en lice. Pas de Bust : une
-fléchette hors jeu ne compte simplement pas.
+Une fois un secteur fermé, les marques en trop valent sa valeur en points tant
+qu'au moins un adversaire ne l'a pas fermé ; fermé par tout le monde, il est
+**mort** et ne compte plus. Pas de Bust : une fléchette hors jeu ne compte
+simplement pas.
+
+| Variante | Les points… | On gagne en ayant tout fermé et… |
+|---|---|---|
+| **Standard** | sont pour vous | **au moins autant** de points que chaque adversaire |
+| **Cut-throat** | vont à chaque adversaire qui n'a pas fermé le secteur | **au plus autant** de points qu'eux — le plus bas l'emporte |
 
 **Bust** : dépassement du score, reste impossible à terminer (par exemple 1 en
 Double Out, 1 ou 2 en Triple Out) ou sortie non conforme. Le joueur revient au
@@ -113,7 +117,7 @@ manche ne se terminera pas ici.
 
 Au cricket, le conseil change de nature : il indique le secteur à fermer — en
 privilégiant ceux qui rapporteront aussi des points — puis, une fois tout fermé,
-où marquer pour repasser devant.
+où marquer pour repasser devant (ou, en cut-throat, où charger les adversaires).
 
 Exemple de préparation, à 180 : aucune sortie n'existe en Double Out (le maximum
 est 170), le moteur propose donc `T20 → T20 → 20` — *« laisse 40, sortable au
@@ -184,7 +188,7 @@ web/
 | `GET /health` | sonde du healthcheck Docker |
 | `GET /api/options` | valeurs acceptées (scores, règles, niveaux, cibles) |
 | `GET /api/game` | état courant, ou `{ view: null }` |
-| `POST /api/game` | crée la partie — `mode: 'x01' \| 'cricket'` (409 si une partie tourne déjà, sauf `replace: true`) |
+| `POST /api/game` | crée la partie — `mode: 'x01' \| 'cricket'`, `variant: 'standard' \| 'cutthroat'` (409 si une partie tourne déjà, sauf `replace: true`) |
 | `DELETE /api/game` | efface la partie et libère la place |
 | `GET /api/qr?text=…` | QR code SVG |
 | `WS /ws?role=tv\|phone&playerId=…` | flux temps réel |
@@ -214,8 +218,7 @@ Voir [DEPLOY-VPS.md](DEPLOY-VPS.md) pour la première mise en ligne.
 ## 5. Suite possible
 
 L'architecture (moteur pur, état sérialisable, journal des fléchettes) est prête
-pour : Around the Clock, cricket en « cut-throat » (les points vont aux
-adversaires), parties en équipes, comptes joueurs et statistiques, historique,
-tournois, mode entraînement, sons et thèmes TV.
+pour : Around the Clock, parties en équipes, comptes joueurs et statistiques,
+historique, tournois, mode entraînement, sons et thèmes TV.
 Plusieurs parties simultanées redeviendraient possibles en remplaçant `store.ts`
 par un registre indexé (et, à ce moment-là seulement, par une base).

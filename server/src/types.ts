@@ -2,9 +2,9 @@
 
 import type { InRule, OutRule, ThrowKind } from './engine/rules.ts';
 import type { Level, Recommendation } from './engine/checkout.ts';
-import type { Marks } from './engine/cricket.ts';
+import type { CricketVariant, Marks } from './engine/cricket.ts';
 
-export type { InRule, OutRule, Level, Recommendation, ThrowKind, Marks };
+export type { InRule, OutRule, Level, Recommendation, ThrowKind, Marks, CricketVariant };
 
 export type GameStatus = 'playing' | 'paused' | 'finished';
 
@@ -102,6 +102,8 @@ export interface DartLogEntry {
 
 export interface GameState {
   mode: GameMode;
+  /** Cricket : variante de comptage (points pour soi, ou pour les adversaires). */
+  variant: CricketVariant;
   createdAt: string;
   updatedAt: string;
   startScore: number;

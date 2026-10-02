@@ -14,7 +14,8 @@ import {
   CRICKET_TARGETS, closedCount, emptyMarks, hasWon, isDead, recommendCricket, resolveCricketDart,
 } from './engine/cricket.ts';
 import type {
-  DartLogEntry, DartRecord, GameEvent, GameMode, GameState, GameView, InRule, Level, OutRule, Player, Turn, TurnSummary,
+  CricketVariant, DartLogEntry, DartRecord, GameEvent, GameMode, GameState, GameView, InRule, Level, OutRule,
+  Player, Turn, TurnSummary,
 } from './types.ts';
 
 const MAX_UNDO = 300;
@@ -29,6 +30,8 @@ export function makeId(size = 5): string {
 export interface CreateOptions {
   /** `x01` par défaut (301/501), ou `cricket`. */
   mode?: GameMode;
+  /** Cricket : `standard` (points pour soi) ou `cutthroat` (points aux adversaires). */
+  variant?: CricketVariant;
   startScore: number;
   inRule: InRule;
   outRule: OutRule;
@@ -89,6 +92,7 @@ export class Game {
     const now = new Date().toISOString();
     const state: GameState = {
       mode,
+      variant: opts.variant === 'cutthroat' ? 'cutthroat' : 'standard',
       createdAt: now,
       updatedAt: now,
       startScore: opts.startScore,
@@ -228,9 +232,12 @@ export class Game {
   private finishGame(): void {
     // Les joueurs encore en lice sont classés derrière ceux qui ont terminé,
     // par score restant croissant.
-    const left = this.contenders().sort((a, b) => (this.state.mode === 'cricket'
-      ? (closedCount(b.marks) - closedCount(a.marks)) || (b.score - a.score)
-      : a.score - b.score));
+    const left = this.contenders().sort((a, b) => {
+      if (this.state.mode !== 'cricket') return a.score - b.score;
+      const closed = closedCount(b.marks) - closedCount(a.marks);
+      // Cut-throat : le plus bas score l'emporte.
+      return closed || (this.state.variant === 'cutthroat' ? a.score - b.score : b.score - a.score);
+    });
     for (const p of left) {
       p.rank = this.state.ranking.length + 1;
       this.state.ranking.push(p.id);
@@ -345,16 +352,23 @@ export class Game {
     const scoreBefore = p.score;
     const dartNo = turn.darts.length + 1;
 
-    const outcome = resolveCricketDart(target, p, rivals);
+    const variant = this.state.variant;
+    const outcome = resolveCricketDart(target, p, rivals, variant);
     if (outcome.sector !== null && outcome.marksAdded > 0) {
       p.marks[outcome.sector] = (p.marks[outcome.sector] ?? 0) + outcome.marksAdded;
     }
     p.score += outcome.pointsAdded;
+    // Cut-throat : les points atterrissent chez les adversaires encore ouverts.
+    for (const share of outcome.pointsTo) {
+      const victim = this.player(share.id);
+      if (victim) victim.score += share.points;
+    }
+    const givenAway = outcome.pointsTo.reduce((sum, share) => sum + share.points, 0);
 
     // La victoire se juge face aux joueurs encore en lice.
     const inPlay = rivals.filter((o) => !o.finished);
-    const won = hasWon(p, inPlay);
-    const kind = won ? 'win' : outcome.marksAdded > 0 || outcome.pointsAdded > 0 ? 'score' : 'no-count';
+    const won = hasWon(p, inPlay, variant);
+    const kind = won ? 'win' : outcome.marksAdded > 0 || outcome.pointsAdded + givenAway > 0 ? 'score' : 'no-count';
 
     const record: DartRecord = {
       code: target.code,
@@ -365,7 +379,7 @@ export class Game {
       kind,
       scoreAfter: p.score,
       marks: outcome.marksAdded,
-      points: outcome.pointsAdded,
+      points: outcome.pointsAdded + givenAway,
     };
     turn.darts.push(record);
     p.stats.darts += 1;
@@ -469,7 +483,12 @@ export class Game {
     const recommendation = !p || !turn || this.state.status !== 'playing'
       ? idle
       : cricket
-        ? recommendCricket(p, this.state.players.filter((o) => o.id !== p.id && !o.removed && !o.finished), this.state.level)
+        ? recommendCricket(
+            p,
+            this.state.players.filter((o) => o.id !== p.id && !o.removed && !o.finished),
+            this.state.level,
+            this.state.variant,
+          )
         : recommend({
             remaining: p.score,
             dartsLeft,

@@ -53,7 +53,10 @@ function render(next) {
   $('#title').textContent = cricket ? 'Cricket' : `Partie en ${view.startScore}`;
   $('#rules').replaceChildren(
     ...(cricket
-      ? [el('span', 'tag', '20 · 19 · 18 · 17 · 16 · 15 · Bull')]
+      ? [
+          el('span', 'tag', '20 · 19 · 18 · 17 · 16 · 15 · Bull'),
+          el('span', 'tag', view.variant === 'cutthroat' ? 'Cut-throat · le plus bas gagne' : 'Standard · le plus haut gagne'),
+        ]
       : [el('span', 'tag', RULE_LABELS.in[view.inRule]), el('span', 'tag', RULE_LABELS.out[view.outRule])]),
     el('span', 'tag', `Conseils ${RULE_LABELS.level[view.level]}`),
   );
@@ -119,7 +122,7 @@ function renderStage(first) {
   // Au cricket le grand nombre est un total de points : on l'annonce.
   const left = `${current.dartsLeft} fléchette${current.dartsLeft > 1 ? 's' : ''} restante${current.dartsLeft > 1 ? 's' : ''}`;
   $('#sub').textContent = view.mode === 'cricket'
-    ? `points · ${left} · tour à ${current.turnTotal}`
+    ? `points ${view.variant === 'cutthroat' ? 'encaissés' : 'marqués'} · ${left} · tour à ${current.turnTotal}`
     : `${left} · tour à ${current.turnTotal}`;
 
   // Le score défile jusqu'à sa nouvelle valeur — seulement s'il s'agit du même
@@ -342,7 +345,8 @@ function renderStatus() {
   const stats = player?.stats;
   const average = stats && stats.darts > 0 ? ((stats.points / stats.darts) * 3).toFixed(1) : null;
   if (view.mode === 'cricket') {
-    $('#status').textContent = `Tour ${view.turnNo} · fermer trois fois chaque secteur`;
+    const goal = view.variant === 'cutthroat' ? 'puis charger les adversaires' : 'puis marquer dessus';
+    $('#status').textContent = `Tour ${view.turnNo} · fermer trois fois chaque secteur, ${goal}`;
     return;
   }
   $('#status').textContent = view.status === 'finished'

@@ -8,8 +8,9 @@ import { $, $$, RULE_LABELS, api, buzz, connect, el, registerSW, store, toast } 
 registerSW();
 
 const SHARED = 'shared';
-const config = { mode: 'x01', startScore: 501, inRule: 'straight', outRule: 'double', level: 'standard' };
+const config = { mode: 'x01', variant: 'standard', startScore: 501, inRule: 'straight', outRule: 'double', level: 'standard' };
 const CRICKET_LABELS = { 25: 'Bull' };
+const VARIANT_LABELS = { standard: 'standard', cutthroat: 'cut-throat' };
 const draft = [];                       // joueurs saisis avant le lancement
 
 let view = null;                        // état de la partie, ou null
@@ -48,8 +49,10 @@ function gameTypeSegment() {
   const paint = () => {
     const current = config.mode === 'cricket' ? 'cricket' : String(config.startScore);
     $$('button', group).forEach((b) => b.setAttribute('aria-pressed', String(b.value === current)));
-    // Les règles d'entrée et de sortie n'existent pas au cricket.
+    // Les règles d'entrée et de sortie n'existent pas au cricket, et
+    // inversement pour la variante de comptage.
     for (const card of $$('#setup [data-x01]')) card.hidden = config.mode === 'cricket';
+    for (const card of $$('#setup [data-cricket]')) card.hidden = config.mode !== 'cricket';
   };
   group.addEventListener('click', (event) => {
     const button = event.target.closest('button');
@@ -65,6 +68,7 @@ function gameTypeSegment() {
 }
 
 gameTypeSegment();
+segment('variant', 'variant');
 segment('inRule', 'inRule');
 segment('outRule', 'outRule');
 segment('level', 'level');
@@ -283,9 +287,10 @@ function render(next) {
   // La barre du haut reste courte (elle partage la ligne avec deux boutons) :
   // le détail des règles est rappelé au-dessus des scores.
   const cricket = view.mode === 'cricket';
-  $('#rules').textContent = cricket ? 'Cricket' : String(view.startScore);
+  const cutthroat = cricket && view.variant === 'cutthroat';
+  $('#rules').textContent = cricket ? (cutthroat ? 'Cut-throat' : 'Cricket') : String(view.startScore);
   $('#scoresTitle').textContent = cricket
-    ? `Cricket · Conseils ${RULE_LABELS.level[view.level]}`
+    ? `Cricket ${VARIANT_LABELS[view.variant] ?? ''} · ${cutthroat ? 'le plus bas gagne' : 'le plus haut gagne'}`
     : `Scores · ${RULE_LABELS.in[view.inRule]} · ${RULE_LABELS.out[view.outRule]} · Conseils ${RULE_LABELS.level[view.level]}`;
   $('#quitBtn').hidden = false;
   $('#quitBtn').textContent = view.status === 'finished' ? 'Nouvelle' : 'Terminer';
@@ -318,7 +323,7 @@ function render(next) {
   $('#score').textContent = current.score;
   $('#turnBadge').textContent = myTurn && choice !== SHARED ? 'À toi de jouer' : 'Au tour de';
   $('#meta').textContent = cricket
-    ? `points · ${current.dartsLeft} fléchette${current.dartsLeft > 1 ? 's' : ''} · tour à ${current.turnTotal}`
+    ? `points ${cutthroat ? 'encaissés' : 'marqués'} · ${current.dartsLeft} fléchette${current.dartsLeft > 1 ? 's' : ''} · tour à ${current.turnTotal}`
     : `${current.dartsLeft} fléchette${current.dartsLeft > 1 ? 's' : ''} · tour à ${current.turnTotal}`;
   renderMarksStrip(cricket, current.playerId);
   $('#scoreboard').classList.toggle('waiting', !myTurn);

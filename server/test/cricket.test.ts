@@ -37,7 +37,7 @@ test('trois marques ferment un secteur', () => {
   const me = player();
   const other = player({ id: 'o' });
   const first = resolveCricketDart(t('S20'), me, [other]);
-  assert.deepEqual(first, { sector: 20, marksAdded: 1, pointsAdded: 0, closed: false });
+  assert.deepEqual(first, { sector: 20, marksAdded: 1, pointsAdded: 0, pointsTo: [], closed: false });
   me.marks[20] = 2;
   const second = resolveCricketDart(t('S20'), me, [other]);
   assert.equal(second.closed, true);
@@ -211,4 +211,64 @@ test('la vue signale les secteurs morts', () => {
   alice!.marks[20] = 3;
   bob!.marks[20] = 3;
   assert.deepEqual(g.view().cricket?.dead, [20]);
+});
+
+
+// ── Cut-throat ─────────────────────────────────────────────────────────────
+
+test('cut-throat : les points vont aux adversaires encore ouverts', () => {
+  const me = player({ marks: { ...emptyMarks(), 20: 3 } });
+  const open1 = player({ id: 'a' });
+  const open2 = player({ id: 'b' });
+  const closed = player({ id: 'c', marks: { ...emptyMarks(), 20: 3 } });
+
+  const res = resolveCricketDart(t('T20'), me, [open1, open2, closed], 'cutthroat');
+  assert.equal(res.pointsAdded, 0, 'le lanceur ne marque rien');
+  assert.deepEqual(res.pointsTo, [{ id: 'a', points: 60 }, { id: 'b', points: 60 }]);
+
+  // Tout le monde a fermé : plus rien à distribuer.
+  assert.deepEqual(resolveCricketDart(t('T20'), me, [closed], 'cutthroat').pointsTo, []);
+});
+
+test('cut-throat : le plus bas score gagne', () => {
+  const closedAll = Object.fromEntries(CRICKET_TARGETS.map((s) => [s, 3]));
+  const me = player({ marks: closedAll, score: 40 });
+  assert.equal(hasWon(me, [player({ id: 'o', score: 80 })], 'cutthroat'), true);
+  assert.equal(hasWon(me, [player({ id: 'o', score: 40 })], 'cutthroat'), true, 'à égalité, on gagne');
+  assert.equal(hasWon(me, [player({ id: 'o', score: 20 })], 'cutthroat'), false, 'devant aux points');
+  // La variante standard juge dans l'autre sens.
+  assert.equal(hasWon(me, [player({ id: 'o', score: 20 })], 'standard'), true);
+});
+
+test('cut-throat : le conseil parle de points à donner', () => {
+  const closedAll = Object.fromEntries(CRICKET_TARGETS.map((s) => [s, 3]));
+  const me = player({ marks: closedAll, score: 90 });
+  const rival = player({ id: 'o', score: 40, marks: { ...emptyMarks(), 20: 3 } });
+  const r = recommendCricket(me, [rival], 'standard', 'cutthroat');
+  assert.equal(r.text, 'T19', 'le 20 est fermé chez l\'adversaire');
+  assert.match(r.note ?? '', /51 points à donner/);
+});
+
+test('cut-throat : une partie complète distribue bien les points', () => {
+  const g = Game.create({
+    mode: 'cricket', variant: 'cutthroat', startScore: 501,
+    inRule: 'straight', outRule: 'double', level: 'standard',
+    players: ['Alice', 'Bob', 'Chloé'],
+  });
+  assert.equal(g.state.variant, 'cutthroat');
+  const [alice, bob, chloe] = g.state.players;
+
+  g.applyDart('T20');                       // Alice ferme le 20
+  g.applyDart('T20');                       // 60 points pour Bob et Chloé
+  assert.equal(alice!.score, 0);
+  assert.equal(bob!.score, 60);
+  assert.equal(chloe!.score, 60);
+  assert.equal(g.state.turn!.darts[1]!.points, 120, 'points distribués au total');
+
+  // Alice ferme tout : elle gagne car elle est la plus basse.
+  for (const sector of [19, 18, 17, 16, 15]) alice!.marks[sector] = 3;
+  alice!.marks[25] = 2;
+  g.applyDart('S25');
+  assert.equal(alice!.finished, true);
+  assert.equal(alice!.rank, 1);
 });

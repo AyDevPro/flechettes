@@ -1,16 +1,21 @@
 /**
- * Cricket (règles américaines classiques).
+ * Cricket, en deux variantes.
  *
  * Secteurs en jeu : 20, 19, 18, 17, 16, 15 et le bull.
  *
  * • Chaque joueur doit « fermer » un secteur en y plaçant trois marques.
  *   Un simple vaut une marque, un double deux, un triple trois ; l'anneau
  *   extérieur du bull vaut une marque, le bull 50 en vaut deux.
- * • Une fois le secteur fermé, les marques en trop rapportent sa valeur en
- *   points — tant qu'au moins un adversaire ne l'a pas fermé.
+ * • Une fois le secteur fermé, les marques en trop valent sa valeur en points
+ *   tant qu'au moins un adversaire ne l'a pas fermé.
  * • Un secteur fermé par tout le monde est « mort » : il ne rapporte plus rien.
- * • On gagne en ayant fermé les sept secteurs **et** au moins autant de points
- *   que chaque adversaire encore en lice.
+ *
+ * Variante **standard** : ces points sont pour vous, et on gagne en ayant fermé
+ * les sept secteurs avec au moins autant de points que chaque adversaire.
+ *
+ * Variante **cut-throat** : ces points sont distribués à chaque adversaire qui
+ * n'a pas fermé le secteur — on les encombre. On gagne en ayant tout fermé avec
+ * au plus autant de points que chaque adversaire : le plus bas l'emporte.
  *
  * Module pur : aucune dépendance à l'état de la partie ni au réseau.
  */
@@ -20,6 +25,14 @@ import type { Level, Recommendation } from './checkout.ts';
 
 export const CRICKET_TARGETS = [20, 19, 18, 17, 16, 15, 25];
 export const MARKS_TO_CLOSE = 3;
+
+/** Variante de cricket : points pour soi, ou points donnés aux adversaires. */
+export type CricketVariant = 'standard' | 'cutthroat';
+export const CRICKET_VARIANTS: CricketVariant[] = ['standard', 'cutthroat'];
+export const VARIANT_LABELS: Record<CricketVariant, string> = {
+  standard: 'Standard',
+  cutthroat: 'Cut-throat',
+};
 
 export type Marks = Record<number, number>;
 
@@ -62,18 +75,22 @@ export interface CricketResolution {
   sector: number | null;
   /** Marques réellement posées (une fois le secteur fermé, le reste part en points). */
   marksAdded: number;
+  /** Points pour le lanceur (variante standard). */
   pointsAdded: number;
+  /** Points distribués aux adversaires encore ouverts (variante cut-throat). */
+  pointsTo: { id: string; points: number }[];
   /** Le secteur vient-il d'être fermé par cette fléchette ? */
   closed: boolean;
 }
 
-const NOTHING: CricketResolution = { sector: null, marksAdded: 0, pointsAdded: 0, closed: false };
+const NOTHING: CricketResolution = { sector: null, marksAdded: 0, pointsAdded: 0, pointsTo: [], closed: false };
 
 /** Résout une fléchette pour un joueur donné, face à ses adversaires. */
 export function resolveCricketDart(
   target: Target,
   player: CricketPlayer,
   opponents: CricketPlayer[],
+  variant: CricketVariant = 'standard',
 ): CricketResolution {
   const marks = marksOf(target);
   if (!marks) return NOTHING;
@@ -84,21 +101,29 @@ export function resolveCricketDart(
   const marksAdded = Math.min(marks, needed);
   const after = before + marksAdded;
   const spare = marks - marksAdded;
+  const closed = before < MARKS_TO_CLOSE && after >= MARKS_TO_CLOSE;
 
-  // Les marques en trop ne rapportent que si un adversaire n'a pas fermé.
-  const scoring = after >= MARKS_TO_CLOSE && opponents.some((o) => !isClosed(o.marks, sector));
-  return {
-    sector,
-    marksAdded,
-    pointsAdded: scoring ? spare * sector : 0,
-    closed: before < MARKS_TO_CLOSE && after >= MARKS_TO_CLOSE,
-  };
+  // Les marques en trop ne valent des points que si le secteur reste ouvert
+  // chez au moins un adversaire.
+  const open = after >= MARKS_TO_CLOSE ? opponents.filter((o) => !isClosed(o.marks, sector)) : [];
+  if (spare === 0 || open.length === 0) {
+    return { sector, marksAdded, pointsAdded: 0, pointsTo: [], closed };
+  }
+
+  const points = spare * sector;
+  return variant === 'cutthroat'
+    // Cut-throat : chaque adversaire encore ouvert encaisse les points.
+    ? { sector, marksAdded, pointsAdded: 0, pointsTo: open.map((o) => ({ id: o.id, points })), closed }
+    : { sector, marksAdded, pointsAdded: points, pointsTo: [], closed };
 }
 
 /** Le joueur remplit-il les conditions de victoire ? */
-export function hasWon(player: CricketPlayer, opponents: CricketPlayer[]): boolean {
+export function hasWon(player: CricketPlayer, opponents: CricketPlayer[], variant: CricketVariant = 'standard'): boolean {
   if (!hasClosedAll(player.marks)) return false;
-  return opponents.every((o) => player.score >= o.score);
+  // Standard : il faut mener aux points. Cut-throat : il faut être le plus bas.
+  return variant === 'cutthroat'
+    ? opponents.every((o) => player.score <= o.score)
+    : opponents.every((o) => player.score >= o.score);
 }
 
 // ── Conseils ───────────────────────────────────────────────────────────────
@@ -110,7 +135,12 @@ const NONE: Recommendation = { kind: 'none', codes: [], labels: [], text: '—',
  * aussi des points ; une fois tout fermé, on marque sur ce qui reste ouvert
  * chez les adversaires.
  */
-export function recommendCricket(player: CricketPlayer, opponents: CricketPlayer[], level: Level): Recommendation {
+export function recommendCricket(
+  player: CricketPlayer,
+  opponents: CricketPlayer[],
+  level: Level,
+  variant: CricketVariant = 'standard',
+): Recommendation {
   const prefix = level === 'beginner' ? 'S' : 'T';
   const aim = (sector: number, note: string): Recommendation => {
     const code = sector === 25 ? (level === 'beginner' ? 'S25' : 'D25') : `${prefix}${sector}`;
@@ -144,6 +174,11 @@ export function recommendCricket(player: CricketPlayer, opponents: CricketPlayer
   const open = CRICKET_TARGETS.filter((sector) => opponents.some((o) => !isClosed(o.marks, sector)));
   const best = open[0];
   if (best !== undefined) {
+    if (variant === 'cutthroat') {
+      // Il faut charger les adversaires jusqu'à repasser sous le plus bas.
+      const gap = player.score - Math.min(...opponents.map((o) => o.score)) + 1;
+      return aim(best, `${gap} point${gap > 1 ? 's' : ''} à donner`);
+    }
     const behind = Math.max(0, ...opponents.map((o) => o.score - player.score)) + 1;
     return aim(best, `${behind} point${behind > 1 ? 's' : ''} à reprendre`);
   }

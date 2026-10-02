@@ -17,10 +17,10 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { store } from './store.ts';
 import { hub, type Client } from './hub.ts';
 import { IN_RULES, OUT_RULES, type InRule, type OutRule } from './engine/rules.ts';
-import type { GameMode } from './types.ts';
+import type { CricketVariant, GameMode } from './types.ts';
 import { LEVELS, type Level } from './engine/checkout.ts';
 import { MISS, TARGETS } from './engine/board.ts';
-import { CRICKET_TARGETS } from './engine/cricket.ts';
+import { CRICKET_TARGETS, CRICKET_VARIANTS } from './engine/cricket.ts';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -58,6 +58,7 @@ app.get('/api/health', health);
 app.get('/api/options', (_req, res) => {
   res.json({
     modes: ['x01', 'cricket'],
+    cricketVariants: CRICKET_VARIANTS,
     cricketTargets: CRICKET_TARGETS,
     startScores: START_SCORES,
     inRules: IN_RULES,
@@ -77,6 +78,7 @@ app.get('/api/game', (_req, res) => {
 app.post('/api/game', (req, res) => {
   const body = req.body ?? {};
   const mode: GameMode = body.mode === 'cricket' ? 'cricket' : 'x01';
+  const variant: CricketVariant = body.variant === 'cutthroat' ? 'cutthroat' : 'standard';
   const level = String(body.level) as Level;
   const players: string[] = Array.isArray(body.players)
     ? body.players.map((n: unknown) => String(n ?? '').trim().slice(0, 20)).filter(Boolean)
@@ -102,7 +104,7 @@ app.post('/api/game', (req, res) => {
     return res.status(409).json({ error: 'Une partie est déjà en cours', view: running.view() });
   }
 
-  const game = store.create({ mode, startScore, inRule, outRule, level, players, shuffle: !!body.shuffle });
+  const game = store.create({ mode, variant, startScore, inRule, outRule, level, players, shuffle: !!body.shuffle });
   broadcastState();
   res.status(201).json({ view: game.view() });
 });
